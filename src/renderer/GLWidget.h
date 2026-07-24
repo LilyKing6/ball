@@ -69,7 +69,10 @@ private:
     // 网络模式
     NetworkClient* m_networkClient = nullptr;
     QTimer* m_inputTimer = nullptr;
-    qint64 m_lastSnapshotMs = 0;
+    WorldSnapshot m_prevSnap;
+    WorldSnapshot m_curSnap;
+    qint64 m_prevSnapRecvMs = 0;
+    qint64 m_curSnapRecvMs = 0;
     bool m_hasPendingSnap = false;
     bool m_reconnecting = false;
     QString m_reconnectReason;

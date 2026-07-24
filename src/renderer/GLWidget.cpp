@@ -133,6 +133,22 @@ void GLWidget::paintGL() {
     smoothedDt = smoothedDt * 0.85f + rawDt * 0.15f;
     float dt = smoothedDt;
 
+    // 网络模式：在最新 snapshot 与上一帧 snapshot 之间插值，平滑 30Hz 更新
+    if (m_engine->networkMode() && m_hasPendingSnap) {
+        if (m_prevSnapRecvMs > 0 && m_curSnapRecvMs > m_prevSnapRecvMs) {
+            qint64 interval = m_curSnapRecvMs - m_prevSnapRecvMs;
+            float alpha = 0.0f;
+            if (interval > 0) {
+                alpha = static_cast<float>(now - m_curSnapRecvMs) / static_cast<float>(interval);
+                alpha = qBound(0.0f, alpha, 1.0f);
+            }
+            WorldSnapshot interp = WorldSnapshot::lerp(m_prevSnap, m_curSnap, alpha);
+            m_engine->applyNetworkSnapshot(interp);
+        } else if (m_engine) {
+            m_engine->applyNetworkSnapshot(m_curSnap);
+        }
+    }
+
     // 每帧更新虚拟游标（使本地玩家持续移动到游标位置）
     updateVirtualCursor();
 
@@ -365,12 +381,14 @@ void GLWidget::wheelEvent(QWheelEvent* e) {
 // ============================================================================
 
 void GLWidget::onSnapshotReceived(const WorldSnapshot& snap, qint64 recvMs) {
-    m_lastSnapshotMs = recvMs;
-    m_hasPendingSnap = true;
-    // 立即应用到 World（M1 基础版：无插值，直接覆盖）
-    if (m_engine) {
-        m_engine->applyNetworkSnapshot(snap);
+    // 双缓冲：保留最近两帧 snapshot 用于插值
+    if (m_hasPendingSnap) {
+        m_prevSnap = m_curSnap;
+        m_prevSnapRecvMs = m_curSnapRecvMs;
     }
+    m_curSnap = snap;
+    m_curSnapRecvMs = recvMs;
+    m_hasPendingSnap = true;
     update();
 }
 

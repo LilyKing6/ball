@@ -5,7 +5,7 @@
 
 ---
 
-> Verification update (2026-07-24): `go test -race ./... -count=1` passes. The server now spawns 10 AI players by default in the free-mode room. AI behavior includes wander, seek food, chase smaller players, flee bigger players, and split-kill, ported from the Qt `AIController`. Live verification passed for `/health`, WebSocket `join -> welcome -> snapshot`, and a Python smoke test confirming 11 players (1 human + 10 AI) in the snapshot. Remaining limitations are one fixed `default` room, no account system, full-world snapshots, and no client interpolation.
+> Verification update (2026-07-24): `go test -race ./... -count=1` passes. The server now spawns 10 AI players by default in the free-mode room. AI behavior includes wander, seek food, chase smaller players, flee bigger players, and split-kill, ported from the Qt `AIController`. The Qt client now keeps the last two snapshots and linearly interpolates player cell positions/masses between them, smoothing the 30Hz server updates. Live verification passed for `/health`, WebSocket `join -> welcome -> snapshot`, a Python smoke test confirming 11 players (1 human + 10 AI) in the snapshot, and a C++ unit test for `WorldSnapshot::lerp`. Remaining limitations are one fixed `default` room, no account system, and full-world snapshots.
 
 ## 1. 总览
 
@@ -186,6 +186,7 @@ M1 阶段只有一个固定房间 `default`：
 
 - ✅ 服务端自由模式：分裂、吐球、融合、病毒、大豆
 - ✅ AI 填充（服务端自由模式已生成 10 个 AI 玩家，带状态机行为）
+- ✅ 客户端 Snapshot 插值（双缓冲 + 玩家 cell 位置/质量线性插值）
 - ❌ 团战模式
 - ❌ 大逃杀缩圈
 - ❌ 完整防护盾系统
@@ -207,6 +208,22 @@ AI 行为移植自 Qt 客户端的 `AIController`，难度分 Easy/Normal/Hard�
 - Hard：视野大、反应快、分裂击杀积极
 
 AI 玩家使用负数 `playerID`，死亡后由 `world.Step` 自动复活，房间只在总数不足时补充。
+
+### 客户端 Snapshot 插值
+
+为平滑 30Hz 服务端快照，`GLWidget` 维护最近两帧 snapshot：
+
+| 文件 | 说明 |
+|------|------|
+| `src/engine/WorldSnapshot.h` | `WorldSnapshot::lerp(prev, cur, alpha)`：按玩家 ID 匹配，按 cell 索引线性插值位置/质量 |
+| `src/renderer/GLWidget.cpp` | 收到 snapshot 时保留 prev/cur；`paintGL` 按时间 alpha 插值后应用 |
+| `tests/TestWorldSnapshotLerp.cpp` | C++ 单元测试，验证基础插值、新增 cell、新增玩家 |
+
+插值策略：
+- `alpha = (now - curRecvMs) / (curRecvMs - prevRecvMs)`，clamp 到 `[0, 1]`
+- 静态实体（食物、病毒、大豆）直接使用最新 snapshot
+- 玩家 cell 按索引插值；新增 cell 直接出现在 cur 位置
+- 本地玩家输入响应仍保持即时，不受影响
 
 ---
 
@@ -658,7 +675,7 @@ if (m_reconnectOverlay) {
 ## 7. 已知限制（M1 范围内）
 
 - 服务端自由模式已支持分裂/吐球/融合/病毒/大豆，并默认填充 10 个 AI 玩家
-- 客户端不做插值，30Hz snapshot 直接覆盖（M5 优化）
+- 客户端已加入 Snapshot 插值，平滑 30Hz 更新
 - 只有一个固定房间 `default`（M3 多房间支持）
 - 无账号系统，playerId 由服务端按连接顺序分配（M4 账户系统）
 - 无视野裁剪，服务端广播全量 snapshot（M5 性能优化）
@@ -670,9 +687,10 @@ if (m_reconnectOverlay) {
 以下只列当前仍未完成的后续工作：
 
 1. ~~服务端自由模式加入 AI 填充玩家，并为 AI 行为添加规则测试。~~ ✅ 已完成
-2. 增加房间生命周期、大厅/多房间和明确的模式选择。
-3. 为客户端加入 snapshot 插值，并为服务端加入视野裁剪。
-4. 补齐分裂击杀、病毒击杀等累计统计，使对应成就可解锁。
+2. ~~为客户端加入 snapshot 插值。~~ ✅ 已完成
+3. 增加房间生命周期、大厅/多房间和明确的模式选择。
+4. 为服务端加入视野裁剪。
+5. 补齐分裂击杀、病毒击杀等累计统计，使对应成就可解锁。
 
 ---
 

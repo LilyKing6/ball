@@ -199,6 +199,41 @@ struct WorldSnapshot {
     //   observerCenter/observerRadius: 视野裁剪中心/半径（世界坐标）；radius<=0 = 不裁剪
     static WorldSnapshot fromWorld(const class World& world, int tickId,
                                     float centerX = 0, float centerY = 0, float observerRadius = -1);
+
+    // 在两个快照间线性插值，主要用于网络模式下平滑 30Hz snapshot
+    // alpha=0 返回 prev，alpha=1 返回 cur
+    // 玩家按 ID 匹配、按 cell 索引插值位置/质量；静态实体（食物/病毒/大豆）使用 cur
+    static WorldSnapshot lerp(const WorldSnapshot& prev, const WorldSnapshot& cur, float alpha) {
+        if (alpha <= 0.0f) return prev;
+        if (alpha >= 1.0f) return cur;
+
+        // 静态世界属性使用最新快照
+        WorldSnapshot result = cur;
+
+        // 按 ID 建立 prev 玩家索引
+        QMap<int, int> prevIndexById;
+        for (int i = 0; i < prev.players.size(); ++i) {
+            prevIndexById[prev.players[i].id] = i;
+        }
+
+        for (auto& p : result.players) {
+            auto it = prevIndexById.find(p.id);
+            if (it == prevIndexById.end()) continue;
+            const PlayerObservation& prevP = prev.players[*it];
+
+            // 对共同索引的 cell 进行插值；新增 cell 保持 cur 位置
+            int commonCells = qMin(p.cells.size(), prevP.cells.size());
+            for (int i = 0; i < commonCells; ++i) {
+                const CellObservation& a = prevP.cells[i];
+                CellObservation& b = p.cells[i];
+                b.x = a.x + (b.x - a.x) * alpha;
+                b.y = a.y + (b.y - a.y) * alpha;
+                b.mass = a.mass + (b.mass - a.mass) * alpha;
+            }
+        }
+
+        return result;
+    }
 };
 
 #endif // WORLDSNAPSHOT_H

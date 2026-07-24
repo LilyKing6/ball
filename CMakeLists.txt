@@ -184,3 +184,14 @@ target_link_libraries(BallBattle PRIVATE
 )
 
 file(COPY ${CMAKE_SOURCE_DIR}/resources DESTINATION ${CMAKE_BINARY_DIR})
+
+if(BUILD_TESTS)
+    qt_add_executable(TestWorldSnapshotLerp tests/TestWorldSnapshotLerp.cpp)
+    target_include_directories(TestWorldSnapshotLerp PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(TestWorldSnapshotLerp PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+    )
+endif()
+
