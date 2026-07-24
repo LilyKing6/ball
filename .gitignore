@@ -41,6 +41,7 @@ qrc_*.cpp
 /server_err.log
 
 # Agent / local config
+/AGENTS.md
 /.claude/settings.local.json
 /.agents/
 
