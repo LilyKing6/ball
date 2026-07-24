@@ -106,9 +106,12 @@ ball/
 ## 文档
 
 - [`docs/DESIGN.md`](docs/DESIGN.md) — 完整架构设计文档
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — 后续开发任务与优先级
 - [`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md) — 游戏术语规范
 - [`docs/M1_NETWORK_MIGRATION.md`](docs/M1_NETWORK_MIGRATION.md) — 网络迁移文档
 - [`docs/P5_VISUAL_ENHANCEMENT.md`](docs/P5_VISUAL_ENHANCEMENT.md) — 视觉增强文档
+- [`docs/WIKI_RESEARCH.md`](docs/WIKI_RESEARCH.md) — Wiki 机制对照与未实现项
+- [`docs/archive/`](docs/archive/) — 历史方案与已完成计划
 
 ---
 
