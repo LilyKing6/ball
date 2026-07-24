@@ -5,7 +5,7 @@
 
 ---
 
-> Verification update (2026-07-17): `go test -race ./... -count=1` passes. The server implements split, eject, merge, virus fragmentation, spores, and big beans in free mode. Live verification passed for `/health` and the WebSocket `join -> welcome -> snapshot` flow; `cmake --build build --parallel` also passed for the Qt client. This pass did not launch the Qt GUI. Remaining limitations are one fixed `default` room, no account system or AI player generation, full-world snapshots, and no client interpolation.
+> Verification update (2026-07-24): `go test -race ./... -count=1` passes. The server now spawns 10 AI players by default in the free-mode room. AI behavior includes wander, seek food, chase smaller players, flee bigger players, and split-kill, ported from the Qt `AIController`. Live verification passed for `/health`, WebSocket `join -> welcome -> snapshot`, and a Python smoke test confirming 11 players (1 human + 10 AI) in the snapshot. Remaining limitations are one fixed `default` room, no account system, full-world snapshots, and no client interpolation.
 
 ## 1. 总览
 
@@ -185,11 +185,28 @@ M1 阶段只有一个固定房间 `default`：
 ### 当前未实现（后续阶段）
 
 - ✅ 服务端自由模式：分裂、吐球、融合、病毒、大豆
-- ❌ AI 填充（当前房间只有真人玩家）
+- ✅ AI 填充（服务端自由模式已生成 10 个 AI 玩家，带状态机行为）
 - ❌ 团战模式
 - ❌ 大逃杀缩圈
 - ❌ 完整防护盾系统
 - ✅ 真人玩家出生无敌倒计时
+
+### 服务端 AI 填充
+
+M1 阶段服务端默认房间会生成 10 个 AI 玩家，保证单人进入网络模式时也不会空荡。
+
+| 文件 | 说明 |
+|------|------|
+| `server/internal/world/ai.go` | AI 状态机（Wander/SeekFood/ChaseSmaller/FleeBigger/SplitKill） |
+| `server/internal/world/ai_test.go` | AI 单元测试 |
+| `server/internal/server/room.go` | 房间 AI 生成、更新、数量维持逻辑 |
+
+AI 行为移植自 Qt 客户端的 `AIController`，难度分 Easy/Normal/Hard：
+- Easy：视野小、反应慢、不会分裂
+- Normal：视野中等、会分裂但概率低
+- Hard：视野大、反应快、分裂击杀积极
+
+AI 玩家使用负数 `playerID`，死亡后由 `world.Step` 自动复活，房间只在总数不足时补充。
 
 ---
 
@@ -640,11 +657,10 @@ if (m_reconnectOverlay) {
 
 ## 7. 已知限制（M1 范围内）
 
-- 服务端自由模式已支持分裂/吐球/融合/病毒/大豆
+- 服务端自由模式已支持分裂/吐球/融合/病毒/大豆，并默认填充 10 个 AI 玩家
 - 客户端不做插值，30Hz snapshot 直接覆盖（M5 优化）
 - 只有一个固定房间 `default`（M3 多房间支持）
 - 无账号系统，playerId 由服务端按连接顺序分配（M4 账户系统）
-- 无 AI 填充，房间内只有真人玩家（M2 AI 接入）
 - 无视野裁剪，服务端广播全量 snapshot（M5 性能优化）
 
 ---
@@ -653,7 +669,7 @@ if (m_reconnectOverlay) {
 
 以下只列当前仍未完成的后续工作：
 
-1. 服务端自由模式加入 AI 填充玩家，并为 AI 行为添加规则测试。
+1. ~~服务端自由模式加入 AI 填充玩家，并为 AI 行为添加规则测试。~~ ✅ 已完成
 2. 增加房间生命周期、大厅/多房间和明确的模式选择。
 3. 为客户端加入 snapshot 插值，并为服务端加入视野裁剪。
 4. 补齐分裂击杀、病毒击杀等累计统计，使对应成就可解锁。

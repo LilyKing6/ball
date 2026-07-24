@@ -19,6 +19,15 @@ func newTestHTTPServer(t *testing.T) *httptest.Server {
 	t.Helper()
 
 	hub := NewHub()
+
+	// 测试房间不生成 AI，避免快照玩家数量受 AI 影响
+	room := NewRoom("default", world.New(3000, 3000), hub)
+	room.SetTargetAICount(0)
+	hub.mu.Lock()
+	hub.rooms["default"] = room
+	hub.mu.Unlock()
+	go room.Run()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		ServeWSHTTP(hub, w, r)
@@ -185,4 +194,58 @@ func TestClientSendRawAfterCloseIsIgnored(t *testing.T) {
 	client.closeSend()
 
 	client.SendRaw([]byte(`late`))
+}
+
+func TestRoomSpawnsAIPlayers(t *testing.T) {
+	hub := NewHub()
+	room := NewRoom("test", world.New(1000, 1000), hub)
+	room.SetTargetAICount(3)
+	go room.Run()
+	defer room.Stop()
+
+	// 等待 AI 生成（Run 在 physTicker 触发后才会 ensureAICount）
+	time.Sleep(100 * time.Millisecond)
+
+	if n := room.AICount(); n != 3 {
+		t.Errorf("AI count = %d, want 3", n)
+	}
+	if len(room.world.Players) != 3 {
+		t.Errorf("world player count = %d, want 3", len(room.world.Players))
+	}
+	for _, p := range room.world.Players {
+		if !p.IsAI {
+			t.Errorf("player %d is not AI", p.ID)
+		}
+	}
+}
+
+func TestRoomMaintainsAICountAfterAIDeath(t *testing.T) {
+	hub := NewHub()
+	room := NewRoom("test", world.New(1000, 1000), hub)
+	room.SetTargetAICount(2)
+	go room.Run()
+	defer room.Stop()
+
+	time.Sleep(100 * time.Millisecond)
+	if room.AICount() != 2 {
+		t.Fatalf("initial AI count = %d, want 2", room.AICount())
+	}
+
+	// 手动杀死一个 AI，等待房间补充
+	room.mu.Lock()
+	for pid := range room.aiControllers {
+		if p, ok := room.world.Players[pid]; ok {
+			for i := range p.Cells {
+				p.Cells[i].Alive = false
+			}
+		}
+		break
+	}
+	room.mu.Unlock()
+
+	time.Sleep(150 * time.Millisecond)
+
+	if room.AICount() != 2 {
+		t.Errorf("AI count after respawn = %d, want 2", room.AICount())
+	}
 }

@@ -11,6 +11,7 @@ import (
 )
 
 // Room 一个游戏房间：World + 客户端列表 + tick loop
+// M2 新增：房间内保持固定数量 AI 玩家，避免真人玩家单独进入时房间空旷。
 type Room struct {
 	name  string
 	world *world.World
@@ -22,20 +23,29 @@ type Room struct {
 	inputMu       sync.Mutex
 	pendingInputs map[int]proto.PlayerInput
 
+	aiMu           sync.Mutex
+	aiControllers  map[int]*world.AIController
+	nextAIID       int
+	targetAICount  int
+
 	tickID int
 	stop   chan struct{}
 }
 
 // NewRoom 创建房间
 func NewRoom(name string, w *world.World, hub *Hub) *Room {
-	return &Room{
+	r := &Room{
 		name:          name,
 		world:         w,
 		hub:           hub,
 		clients:       make(map[int]*Client),
 		pendingInputs: make(map[int]proto.PlayerInput),
+		aiControllers: make(map[int]*world.AIController),
+		nextAIID:      -1, // AI 使用负数 ID，避免与真人玩家正数 ID 冲突
+		targetAICount: 10,
 		stop:          make(chan struct{}),
 	}
+	return r
 }
 
 // AddPlayer 客户端进入房间，返回分配的 playerID
@@ -89,8 +99,88 @@ func (r *Room) Stop() {
 	close(r.stop)
 }
 
+// SetTargetAICount 设置目标 AI 数量（可在房间启动前调用）
+func (r *Room) SetTargetAICount(n int) {
+	r.aiMu.Lock()
+	defer r.aiMu.Unlock()
+	r.targetAICount = n
+}
+
+// addAIPlayer 在 world 中添加一个 AI 玩家，并创建对应控制器
+// 调用者必须持有 r.mu 和 r.aiMu 的写锁
+func (r *Room) addAIPlayer() {
+	pid := r.nextAIID
+	r.nextAIID--
+
+	name := world.DefaultAIPlayerName(-pid - 1)
+	p := r.world.AddPlayer(pid, name)
+	p.IsAI = true
+	p.Team = 0
+
+	diff := world.RandomAIDifficulty()
+	r.aiControllers[pid] = world.NewAIController(diff)
+}
+
+// removeAIPlayer 移除一个 AI 玩家
+// 调用者必须持有 r.mu 和 r.aiMu 的写锁
+func (r *Room) removeAIPlayer(pid int) {
+	r.world.RemovePlayer(pid)
+	delete(r.aiControllers, pid)
+}
+
+// ensureAICount 维持目标数量的 AI 玩家
+// AI 死亡后由 world.Step 自动复活；本函数只确保 AI 玩家总数 >= target。
+// 调用者必须持有 r.mu 的写锁
+func (r *Room) ensureAICount() {
+	r.aiMu.Lock()
+	defer r.aiMu.Unlock()
+
+	target := r.targetAICount
+	current := len(r.aiControllers)
+
+	for current < target {
+		r.addAIPlayer()
+		current++
+	}
+
+	// 如果 AI 总数超过目标，移除死亡的 AI；如果仍超过则不动
+	if current > target {
+		for pid := range r.aiControllers {
+			if p, ok := r.world.Players[pid]; ok && p.Dead {
+				r.removeAIPlayer(pid)
+				current--
+				if current <= target {
+					break
+				}
+			}
+		}
+	}
+}
+
+// updateAI 更新所有 AI 控制器，写入 cursor / WantSplit / WantEject
+// 调用者必须持有 r.mu 的写锁
+func (r *Room) updateAI(dt float64) {
+	r.aiMu.Lock()
+	defer r.aiMu.Unlock()
+
+	for pid, ctrl := range r.aiControllers {
+		p, ok := r.world.Players[pid]
+		if !ok || p.Dead {
+			continue
+		}
+		ctrl.Update(p, dt, r.world)
+		// AIController 内部会直接设置 p.WantSplit / p.WantEject
+		// world.Step 会消费并清空这些标志
+	}
+}
+
 // Run tick loop（在独立 goroutine 中）
 func (r *Room) Run() {
+	// 启动时先补满 AI
+	r.mu.Lock()
+	r.ensureAICount()
+	r.mu.Unlock()
+
 	// 物理 60Hz
 	physTicker := time.NewTicker(time.Second / 60)
 	defer physTicker.Stop()
@@ -109,6 +199,10 @@ func (r *Room) Run() {
 
 		case <-physTicker.C:
 			r.mu.Lock()
+
+			// 0) 更新 AI：写入 cursor / wantSplit / wantEject
+			r.updateAI(dt)
+
 			// 1) 收集本帧输入
 			r.inputMu.Lock()
 			inputs := r.pendingInputs
@@ -130,7 +224,10 @@ func (r *Room) Run() {
 			r.world.Step(dt)
 			r.tickID++
 
-			// 4) 检测死亡并通知客户端
+			// 4) 维持 AI 数量（AI 死亡后复活由 world.Step 处理，这里补充新的 AI）
+			r.ensureAICount()
+
+			// 5) 检测死亡并通知客户端
 			for _, p := range r.world.Players {
 				if p.Dead && !p.DeathNotified && !p.IsAI {
 					p.DeathNotified = true
@@ -187,9 +284,16 @@ func (r *Room) broadcast() {
 	}
 }
 
-// PlayerCount 当前玩家数（线程安全）
+// PlayerCount 当前真人玩家数（线程安全）
 func (r *Room) PlayerCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.clients)
+}
+
+// AICount 当前 AI 玩家数（线程安全）
+func (r *Room) AICount() int {
+	r.aiMu.Lock()
+	defer r.aiMu.Unlock()
+	return len(r.aiControllers)
 }
