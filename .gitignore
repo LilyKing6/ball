@@ -1,0 +1,56 @@
+# Build outputs
+/build/
+/out/
+/cmake-build-*/
+*.exe
+*.dll
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.pdb
+
+# IDE
+/.vscode/
+/.idea/
+*.user
+*.pro.user
+*.pro.user.*
+CMakeLists.txt.user
+
+# Qt
+*.qm
+moc_*.cpp
+moc_*.h
+ui_*.h
+qrc_*.cpp
+.qmake.stash
+
+# Runtime generated files
+/config.json
+/ballbattle.db
+/server/ballbattle-server.exe
+/server/server_*.log
+/server/server_*.txt
+/err.txt
+/out.txt
+/stderr.txt
+/stdout.txt
+/server_out.log
+/server_err.log
+
+# Agent / local config
+/.claude/settings.local.json
+/.agents/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temp
+*.tmp
+*.log
+*.bak
+*.swp
