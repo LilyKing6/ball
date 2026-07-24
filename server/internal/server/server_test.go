@@ -196,6 +196,179 @@ func TestClientSendRawAfterCloseIsIgnored(t *testing.T) {
 	client.SendRaw([]byte(`late`))
 }
 
+func TestHubCreatesAndListsRooms(t *testing.T) {
+	hub := NewHub()
+	defer func() {
+		hub.mu.RLock()
+		rooms := make([]*Room, 0, len(hub.rooms))
+		for _, r := range hub.rooms {
+			rooms = append(rooms, r)
+		}
+		hub.mu.RUnlock()
+		for _, r := range rooms {
+			r.Stop()
+		}
+	}()
+
+	client := &Client{hub: hub, send: make(chan []byte, 10)}
+
+	// 创建房间
+	create := proto.Envelope{
+		Type:    "create_room",
+		Payload: mustJSON(t, proto.CreateRoomMsg{Name: "custom", Mode: "free", Capacity: 8}),
+	}
+	hub.HandleMessage(client, mustJSON(t, create))
+
+	if hub.GetRoom("custom") == nil {
+		t.Fatal("room custom was not created")
+	}
+
+	// 列出房间
+	list := proto.Envelope{Type: "list_rooms", Payload: mustJSON(t, struct{}{})}
+	hub.HandleMessage(client, mustJSON(t, list))
+
+	// 先处理 create_room 响应，再读取 room_list
+	found := false
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case raw := <-client.send:
+			var response proto.Envelope
+			if err := json.Unmarshal(raw, &response); err != nil {
+				t.Fatalf("unmarshal envelope: %v", err)
+			}
+			if response.Type != "room_list" {
+				continue
+			}
+			var listMsg proto.RoomListMsg
+			if err := json.Unmarshal(response.Payload, &listMsg); err != nil {
+				t.Fatalf("unmarshal room_list: %v", err)
+			}
+			for _, r := range listMsg.Rooms {
+				if r.Name == "custom" && r.Capacity == 8 {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("room list = %+v, want custom room with capacity 8", listMsg.Rooms)
+			}
+			return
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	if !found {
+		t.Fatal("room_list not received")
+	}
+}
+
+func TestHubRejectsJoinFullRoom(t *testing.T) {
+	hub := NewHub()
+	defer func() {
+		hub.mu.RLock()
+		rooms := make([]*Room, 0, len(hub.rooms))
+		for _, r := range hub.rooms {
+			rooms = append(rooms, r)
+		}
+		hub.mu.RUnlock()
+		for _, r := range rooms {
+			r.Stop()
+		}
+	}()
+
+	room := NewRoom("full", world.New(1000, 1000), hub)
+	room.SetCapacity(1)
+	room.SetTargetAICount(0)
+	hub.mu.Lock()
+	hub.rooms["full"] = room
+	hub.mu.Unlock()
+	go room.Run()
+
+	// 先占满房间
+	client1 := &Client{hub: hub, send: make(chan []byte, 10)}
+	client1.id = 1
+	hub.Register(client1)
+	room.AddPlayer(client1, "A")
+
+	// 第二个客户端加入应失败
+	client2 := &Client{hub: hub, send: make(chan []byte, 10)}
+	client2.id = 2
+	hub.Register(client2)
+	join := proto.Envelope{
+		Type:    "join",
+		Payload: mustJSON(t, proto.JoinMsg{Name: "B", Mode: "free", Room: "full"}),
+	}
+	hub.HandleMessage(client2, mustJSON(t, join))
+
+	select {
+	case raw := <-client2.send:
+		var response proto.Envelope
+		if err := json.Unmarshal(raw, &response); err != nil {
+			t.Fatalf("unmarshal envelope: %v", err)
+		}
+		if response.Type != "error" {
+			t.Fatalf("response type = %q, want error", response.Type)
+		}
+		var errMsg proto.ErrorMsg
+		if err := json.Unmarshal(response.Payload, &errMsg); err != nil {
+			t.Fatalf("unmarshal error payload: %v", err)
+		}
+		if !strings.Contains(errMsg.Message, "full") {
+			t.Errorf("error message = %q, want room full", errMsg.Message)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("error not received")
+	}
+}
+
+func TestHubJoinCreatesMissingRoom(t *testing.T) {
+	hub := NewHub()
+	defer func() {
+		hub.mu.RLock()
+		rooms := make([]*Room, 0, len(hub.rooms))
+		for _, r := range hub.rooms {
+			rooms = append(rooms, r)
+		}
+		hub.mu.RUnlock()
+		for _, r := range rooms {
+			r.Stop()
+		}
+	}()
+
+	client := &Client{hub: hub, send: make(chan []byte, 10)}
+	client.id = 1
+	hub.Register(client)
+
+	join := proto.Envelope{
+		Type: "join",
+		Payload: mustJSON(t, proto.JoinMsg{
+			Name:            "Alice",
+			Mode:            "free",
+			Room:            "auto_create",
+			CreateIfMissing: true,
+			Capacity:        10,
+		}),
+	}
+	hub.HandleMessage(client, mustJSON(t, join))
+
+	if hub.GetRoom("auto_create") == nil {
+		t.Fatal("auto_create room was not created")
+	}
+
+	select {
+	case raw := <-client.send:
+		var response proto.Envelope
+		if err := json.Unmarshal(raw, &response); err != nil {
+			t.Fatalf("unmarshal envelope: %v", err)
+		}
+		if response.Type != "welcome" {
+			t.Fatalf("response type = %q, want welcome", response.Type)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("welcome not received")
+	}
+}
+
 func TestRoomSpawnsAIPlayers(t *testing.T) {
 	hub := NewHub()
 	room := NewRoom("test", world.New(1000, 1000), hub)

@@ -12,7 +12,8 @@ public:
 
 signals:
     void modeSelected(GameMode mode);
-    void networkModeSelected(const QString& host, int port, const QString& name);
+    void networkModeSelected(const QString& host, int port, const QString& name,
+                             const QString& roomName, bool createIfMissing, int capacity);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;

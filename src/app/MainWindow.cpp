@@ -403,7 +403,8 @@ void MainWindow::applyDisplaySettings() {
     }
 }
 
-void MainWindow::startNetworkedGame(const QString& host, int port, const QString& name) {
+void MainWindow::startNetworkedGame(const QString& host, int port, const QString& name,
+                                    const QString& roomName, bool createIfMissing, int capacity) {
     if (!m_engine) return;
 
     auto& cfg = Config::instance();
@@ -426,6 +427,12 @@ void MainWindow::startNetworkedGame(const QString& host, int port, const QString
     m_netClient = new NetworkClient(this);
     m_engine->setNetworkClient(m_netClient);
     m_glWidget->setNetworkClient(m_netClient);
+
+    // 连接成功后加入指定房间
+    connect(m_netClient, &NetworkClient::connected, this, [this, name, roomName, createIfMissing, capacity]() {
+        qDebug() << "[MainWindow] connected, joining room" << roomName;
+        m_netClient->joinRoom(roomName, name, "free", createIfMissing, capacity);
+    }, Qt::QueuedConnection);
 
     // welcome：切换到游戏视图 + 启动 30Hz input 上行
     connect(m_netClient, &NetworkClient::welcomeReceived, this, [this](int myId, float w, float h) {

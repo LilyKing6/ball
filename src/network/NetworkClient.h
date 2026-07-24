@@ -11,6 +11,13 @@
 #include "engine/WorldSnapshot.h"
 #include "engine/IController.h"
 
+struct RoomInfo {
+    QString name;
+    QString mode;
+    int playerCount = 0;
+    int capacity = 0;
+};
+
 // NetworkClient
 //   连接 Go 服务端的 WebSocket 客户端封装。
 //   协议（JSON over WebSocket）：
@@ -35,16 +42,25 @@ public:
     // 立即发送（用于 split/eject 这种 edge 事件）
     void sendInputImmediate(const PlayerInput& input);
 
+    // 房间操作
+    void listRooms();
+    void createRoom(const QString& name, const QString& mode = "free", int capacity = 20);
+    void joinRoom(const QString& roomName, const QString& playerName, const QString& mode = "free", bool createIfMissing = false, int capacity = 20);
+
     bool isConnected() const;
     int myPlayerId() const { return m_myPlayerId; }
     float worldWidth() const { return m_worldWidth; }
     float worldHeight() const { return m_worldHeight; }
+    QString currentRoom() const { return m_currentRoom; }
 
 signals:
     void connected();
     void welcomeReceived(int myPlayerId, float worldW, float worldH);
     // snapshot 接收时间用于客户端插值（msSinceEpoch）
     void snapshotReceived(const WorldSnapshot& snap, qint64 recvMsSinceEpoch);
+    void roomListReceived(const QVector<RoomInfo>& rooms);
+    void roomCreated(const QString& name, const QString& mode, int capacity);
+    void roomJoined(const QString& name);
     void errorOccurred(const QString& message);
     void disconnected(const QString& reason);
     void deathReceived(const QString& message);
@@ -69,6 +85,7 @@ private:
     int m_myPlayerId = 0;
     float m_worldWidth = 3000.0f;
     float m_worldHeight = 3000.0f;
+    QString m_currentRoom;
 
     // 节流
     qint64 m_lastSentMs = 0;

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
 	"ballbattle-server/internal/proto"
 	"ballbattle-server/internal/world"
@@ -12,6 +13,7 @@ import (
 )
 
 // Hub 管理所有 WebSocket 客户端 + 房间
+// M3 多房间：支持创建/列出/加入多个房间，空房间自动回收。
 type Hub struct {
 	mu         sync.RWMutex
 	rooms      map[string]*Room
@@ -21,27 +23,94 @@ type Hub struct {
 
 // NewHub 创建 Hub
 func NewHub() *Hub {
-	return &Hub{
+	h := &Hub{
 		rooms:      make(map[string]*Room),
 		clients:    make(map[*Client]bool),
 		nextClient: 1,
 	}
+	// 启动后台清理 goroutine
+	go h.cleanupLoop()
+	return h
 }
 
-// DefaultRoom 获取/创建默认房间（M1 只有一个自由模式房间）
+// DefaultRoom 获取/创建默认房间（保持旧客户端兼容）
 func (h *Hub) DefaultRoom() *Room {
+	return h.GetOrCreateRoom("default", "free", 20)
+}
+
+// GetOrCreateRoom 获取或创建指定房间
+// 线程安全
+func (h *Hub) GetOrCreateRoom(name, mode string, capacity int) *Room {
+	if name == "" {
+		name = "default"
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	r, ok := h.rooms["default"]
+	r, ok := h.rooms[name]
 	if !ok {
 		w := world.New(3000, 3000)
-		r = NewRoom("default", w, h)
-		h.rooms["default"] = r
+		r = NewRoom(name, w, h)
+		r.SetMode(mode)
+		r.SetCapacity(capacity)
+		h.rooms[name] = r
 		go r.Run()
-		log.Println("[Hub] default room created and started")
+		log.Printf("[Hub] room %s created and started (mode=%s, capacity=%d)", name, mode, capacity)
 	}
 	return r
+}
+
+// GetRoom 获取房间，不存在返回 nil
+func (h *Hub) GetRoom(name string) *Room {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.rooms[name]
+}
+
+// RoomList 返回当前房间列表（线程安全）
+func (h *Hub) RoomList() []proto.RoomInfo {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	list := make([]proto.RoomInfo, 0, len(h.rooms))
+	for _, r := range h.rooms {
+		list = append(list, r.Info())
+	}
+	return list
+}
+
+// removeRoom 从 Hub 中移除房间（调用者需确保房间已停止）
+// 由 cleanupLoop 调用
+func (h *Hub) removeRoom(name string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.rooms, name)
+	log.Printf("[Hub] room %s removed", name)
+}
+
+// cleanupLoop 定期检查并回收空房间
+func (h *Hub) cleanupLoop() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		h.mu.RLock()
+		rooms := make([]*Room, 0, len(h.rooms))
+		for name, r := range h.rooms {
+			// 保留 default 房间，避免频繁创建销毁
+			if name == "default" {
+				continue
+			}
+			rooms = append(rooms, r)
+		}
+		h.mu.RUnlock()
+
+		for _, r := range rooms {
+			if r.PlayerCount() == 0 {
+				r.Stop()
+				h.removeRoom(r.name)
+			}
+		}
+	}
 }
 
 // Register 登记新客户端
@@ -74,6 +143,17 @@ func (h *Hub) HandleMessage(c *Client, raw []byte) {
 		}
 		h.handleJoin(c, msg)
 
+	case "create_room":
+		var msg proto.CreateRoomMsg
+		if err := json.Unmarshal(env.Payload, &msg); err != nil {
+			c.SendError("bad create_room payload")
+			return
+		}
+		h.handleCreateRoom(c, msg)
+
+	case "list_rooms":
+		h.handleListRooms(c)
+
 	case "input":
 		if c.room == nil {
 			c.SendError("not in a room")
@@ -103,7 +183,35 @@ func (h *Hub) handleJoin(c *Client, msg proto.JoinMsg) {
 		c.room.RemovePlayer(c)
 	}
 
-	room := h.DefaultRoom()
+	roomName := msg.Room
+	if roomName == "" {
+		roomName = "default"
+	}
+
+	var room *Room
+	if msg.CreateIfMissing {
+		capacity := msg.Capacity
+		if capacity <= 0 {
+			capacity = 20
+		}
+		room = h.GetOrCreateRoom(roomName, msg.Mode, capacity)
+	} else {
+		room = h.GetRoom(roomName)
+		// 保持旧客户端兼容：default 房间不存在时自动创建
+		if room == nil && roomName == "default" {
+			room = h.GetOrCreateRoom(roomName, msg.Mode, 20)
+		}
+		if room == nil {
+			c.SendError("room not found: " + roomName)
+			return
+		}
+	}
+
+	if room.IsFull() {
+		c.SendError("room is full: " + roomName)
+		return
+	}
+
 	playerID := room.AddPlayer(c, msg.Name)
 
 	welcome := proto.WelcomeMsg{
@@ -119,6 +227,46 @@ func (h *Hub) handleJoin(c *Client, msg proto.JoinMsg) {
 	room.markReady(c)
 	log.Printf("[Hub] client %d joined room %s as player %d (name=%s)",
 		c.id, room.name, playerID, msg.Name)
+}
+
+func (h *Hub) handleCreateRoom(c *Client, msg proto.CreateRoomMsg) {
+	if msg.Name == "" {
+		c.SendError("room name required")
+		return
+	}
+	if h.GetRoom(msg.Name) != nil {
+		c.SendError("room already exists: " + msg.Name)
+		return
+	}
+	capacity := msg.Capacity
+	if capacity <= 0 {
+		capacity = 20
+	}
+	mode := msg.Mode
+	if mode == "" {
+		mode = "free"
+	}
+	room := h.GetOrCreateRoom(msg.Name, mode, capacity)
+
+	created := proto.RoomCreatedMsg{
+		Name:     room.name,
+		Mode:     room.Mode(),
+		Capacity: room.Capacity(),
+	}
+	payload, _ := json.Marshal(created)
+	env := proto.Envelope{Type: "room_created", Payload: payload}
+	data, _ := json.Marshal(env)
+	c.SendRaw(data)
+	log.Printf("[Hub] client %d created room %s (mode=%s, capacity=%d)",
+		c.id, room.name, mode, capacity)
+}
+
+func (h *Hub) handleListRooms(c *Client) {
+	list := proto.RoomListMsg{Rooms: h.RoomList()}
+	payload, _ := json.Marshal(list)
+	env := proto.Envelope{Type: "room_list", Payload: payload}
+	data, _ := json.Marshal(env)
+	c.SendRaw(data)
 }
 
 // ServeWS HTTP 升级到 WebSocket

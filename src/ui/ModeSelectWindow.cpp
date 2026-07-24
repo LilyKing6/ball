@@ -246,5 +246,12 @@ void ModeSelectWindow::promptNetworkAndEmit() {
         cfg.playerName.isEmpty() ? "Player" : cfg.playerName, &ok);
     if (!ok || name.trimmed().isEmpty()) return;
 
-    emit networkModeSelected(host.trimmed(), port, name.trimmed());
+    QString roomName = QInputDialog::getText(this, QStringLiteral("房间名"),
+        QStringLiteral("Room (留空进默认房间，新名自动创建):"), QLineEdit::Normal,
+        "default", &ok);
+    if (!ok) return;
+    roomName = roomName.trimmed();
+    if (roomName.isEmpty()) roomName = "default";
+
+    emit networkModeSelected(host.trimmed(), port, name.trimmed(), roomName, true, 20);
 }

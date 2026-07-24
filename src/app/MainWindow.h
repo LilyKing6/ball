@@ -38,7 +38,8 @@ public slots:
     void playAgain();
     void onBackToMenu();
     void applyDisplaySettings();
-    void startNetworkedGame(const QString& host, int port, const QString& name);
+    void startNetworkedGame(const QString& host, int port, const QString& name,
+                            const QString& roomName, bool createIfMissing, int capacity);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;

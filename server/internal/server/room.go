@@ -11,11 +11,13 @@ import (
 )
 
 // Room 一个游戏房间：World + 客户端列表 + tick loop
-// M2 新增：房间内保持固定数量 AI 玩家，避免真人玩家单独进入时房间空旷。
+// M3 多房间：支持自定义容量与模式，空房间自动回收。
 type Room struct {
-	name  string
-	world *world.World
-	hub   *Hub
+	name    string
+	mode    string
+	capacity int
+	world   *world.World
+	hub     *Hub
 
 	mu      sync.RWMutex
 	clients map[int]*Client // playerID -> Client
@@ -36,6 +38,8 @@ type Room struct {
 func NewRoom(name string, w *world.World, hub *Hub) *Room {
 	r := &Room{
 		name:          name,
+		mode:          "free",
+		capacity:      20,
 		world:         w,
 		hub:           hub,
 		clients:       make(map[int]*Client),
@@ -46,6 +50,44 @@ func NewRoom(name string, w *world.World, hub *Hub) *Room {
 		stop:          make(chan struct{}),
 	}
 	return r
+}
+
+// SetMode 设置房间模式（启动前调用）
+func (r *Room) SetMode(mode string) {
+	r.aiMu.Lock()
+	defer r.aiMu.Unlock()
+	r.mode = mode
+}
+
+// SetCapacity 设置房间容量（启动前调用）
+func (r *Room) SetCapacity(n int) {
+	if n <= 0 {
+		n = 20
+	}
+	r.aiMu.Lock()
+	defer r.aiMu.Unlock()
+	r.capacity = n
+}
+
+// Mode 返回房间模式
+func (r *Room) Mode() string {
+	r.aiMu.Lock()
+	defer r.aiMu.Unlock()
+	return r.mode
+}
+
+// Capacity 返回房间容量
+func (r *Room) Capacity() int {
+	r.aiMu.Lock()
+	defer r.aiMu.Unlock()
+	return r.capacity
+}
+
+// IsFull 房间是否已满（线程安全）
+func (r *Room) IsFull() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.clients) >= r.capacity
 }
 
 // AddPlayer 客户端进入房间，返回分配的 playerID
@@ -281,6 +323,18 @@ func (r *Room) broadcast() {
 
 	for _, c := range clients {
 		c.SendRaw(data)
+	}
+}
+
+// Info 获取房间列表信息（线程安全）
+func (r *Room) Info() proto.RoomInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return proto.RoomInfo{
+		Name:        r.name,
+		Mode:        r.mode,
+		PlayerCount: len(r.clients),
+		Capacity:    r.capacity,
 	}
 }
 

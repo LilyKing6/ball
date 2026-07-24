@@ -5,7 +5,7 @@
 
 ---
 
-> Verification update (2026-07-24): `go test -race ./... -count=1` passes. The server now spawns 10 AI players by default in the free-mode room. The Qt client keeps the last two snapshots and linearly interpolates player cell positions/masses between them. Achievement counting for split kills and virus kills is now implemented: kills are classified by the killer's recent split and the victim's recent virus hit, persisted to `player_stats.total_split_kills` / `total_virus_kills`, and used to unlock "分裂大师" and "病毒猎人". Live verification passed for `/health`, WebSocket `join -> welcome -> snapshot`, a Python smoke test, and C++ unit tests for snapshot interpolation and kill classification. Remaining limitations are one fixed `default` room, no account system, and full-world snapshots.
+> Verification update (2026-07-24): `go test -race ./... -count=1` passes. The server now supports multiple rooms: clients can create rooms, list rooms, and join specific rooms; empty non-default rooms are cleaned up automatically. The default room is still created on demand for backward compatibility. The server also spawns 10 AI players by default, and the Qt client interpolates snapshots and tracks split/virus kills for achievements. Live verification passed for `/health`, WebSocket `join -> welcome -> snapshot`, Python smoke tests for room create/join and AI population, and C++ unit tests for snapshot interpolation and kill classification. Remaining limitations are no account system and full-world snapshots.
 
 ## 1. 总览
 
@@ -187,6 +187,7 @@ M1 阶段只有一个固定房间 `default`：
 - ✅ 服务端自由模式：分裂、吐球、融合、病毒、大豆
 - ✅ AI 填充（服务端自由模式已生成 10 个 AI 玩家，带状态机行为）
 - ✅ 客户端 Snapshot 插值（双缓冲 + 玩家 cell 位置/质量线性插值）
+- ✅ 多房间 / 大厅系统（创建、列出、加入房间；空房间回收）
 - ❌ 团战模式
 - ❌ 大逃杀缩圈
 - ❌ 完整防护盾系统
@@ -244,6 +245,28 @@ AI 玩家使用负数 `playerID`，死亡后由 `world.Step` 自动复活，房�
 分类规则：
 - **分裂击杀**：杀手在 1.5 秒内进行过分裂，期间造成的击杀
 - **病毒击杀**：受害者 2.0 秒内被刺球击中分裂过，期间被吃掉
+
+### 多房间 / 大厅系统
+
+M3 阶段服务端支持多个游戏房间，客户端可在连接后选择/创建房间。
+
+| 文件 | 说明 |
+|------|------|
+| `server/internal/proto/messages.go` | 新增 `CreateRoomMsg`、`RoomListMsg`、`RoomInfo`、`RoomCreatedMsg` 等 |
+| `server/internal/server/hub.go` | `GetOrCreateRoom`、`GetRoom`、`RoomList`、空房间回收 |
+| `server/internal/server/room.go` | `mode`、`capacity`、`IsFull`、`Info` |
+| `src/network/NetworkClient.h/cpp` | `listRooms`、`createRoom`、`joinRoom`、房间相关信号 |
+| `src/ui/ModeSelectWindow.cpp` | 联网对战时输入房间名，不存在则自动创建 |
+| `src/app/MainWindow.cpp` | 连接成功后调用 `joinRoom` 加入指定房间 |
+
+协议消息：
+- 客户端 → 服务端：`create_room`、`list_rooms`、`join`（带 `room` 字段）
+- 服务端 → 客户端：`room_created`、`room_list`、`welcome`（含 `roomName`）
+
+行为：
+- `default` 房间保持向后兼容，不存在时自动创建
+- 非 `default` 房间在人去空后约 30 秒自动回收
+- 房间可设置容量，满员后拒绝加入
 
 ---
 
@@ -697,7 +720,7 @@ if (m_reconnectOverlay) {
 - 服务端自由模式已支持分裂/吐球/融合/病毒/大豆，并默认填充 10 个 AI 玩家
 - 客户端已加入 Snapshot 插值，平滑 30Hz 更新
 - 成就计数已补齐：分裂击杀、病毒击杀可正确累计并解锁成就
-- 只有一个固定房间 `default`（M3 多房间支持）
+- 多房间 / 大厅系统已支持：创建、列出、加入房间，空房间自动回收
 - 无账号系统，playerId 由服务端按连接顺序分配（M4 账户系统）
 - 无视野裁剪，服务端广播全量 snapshot（M5 性能优化）
 
@@ -710,7 +733,7 @@ if (m_reconnectOverlay) {
 1. ~~服务端自由模式加入 AI 填充玩家，并为 AI 行为添加规则测试。~~ ✅ 已完成
 2. ~~为客户端加入 snapshot 插值。~~ ✅ 已完成
 3. ~~补齐分裂击杀、病毒击杀等累计统计，使对应成就可解锁。~~ ✅ 已完成
-4. 增加房间生命周期、大厅/多房间和明确的模式选择。
+4. ~~增加房间生命周期、大厅/多房间和明确的模式选择。~~ ✅ 已完成
 5. 为服务端加入视野裁剪。
 
 ---
