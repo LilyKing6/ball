@@ -195,7 +195,7 @@ void World::update(float dt) {
             if (killCount > 0) {
                 AudioManager::instance().playSfx("kill");
                 for (auto& kr : kills) {
-                    m_frameKills.append({kr.victimName, kr.victimMass});
+                    m_frameKills.append({kr.victimName, kr.victimMass, kr.isSplitKill, kr.isVirusKill});
                 }
             }
         }
@@ -272,6 +272,8 @@ void World::update(float dt) {
                         float bonusMass = randFloat(0.0f, 50.0f);
                         c.mass += virusMass + bonusMass;
                         if (c.mass > cfg.maxMassPerCell) c.mass = cfg.maxMassPerCell;
+
+                        p.virusHitTimer = 2.0f;
 
                         int fragmentCount = cfg.virusFragmentCount;
                         int maxNewCells = cfg.maxCellsPerPlayer - p.cells.size();

@@ -193,5 +193,20 @@ if(BUILD_TESTS)
         Qt6::Gui
         Qt6::Widgets
     )
+
+    qt_add_executable(TestKillClassification
+        tests/TestKillClassification.cpp
+        src/entity/Player.cpp
+        src/entity/Spore.cpp
+        src/entity/BigBean.cpp
+        src/physics/PhysicsEngine.cpp
+        src/util/Config.cpp
+    )
+    target_include_directories(TestKillClassification PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(TestKillClassification PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+    )
 endif()
 

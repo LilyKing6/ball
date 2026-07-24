@@ -9,6 +9,8 @@ struct KillEvent {
     QString victimName;
     float killTime;
     float victimMass;
+    bool isSplitKill = false;
+    bool isVirusKill = false;
 };
 
 struct GameRecord {
@@ -18,6 +20,8 @@ struct GameRecord {
     float finalMass = 0;
     float maxMass = 0;
     int killCount = 0;
+    int splitKillCount = 0;
+    int virusKillCount = 0;
     QString deathCause;
     QString killedBy;
     int foodEaten = 0;
@@ -42,6 +46,8 @@ struct PlayerStats {
     float totalPlayTime = 0;
     int bestStreak = 0;
     int currentStreak = 0;
+    int totalSplitKills = 0;
+    int totalVirusKills = 0;
 };
 
 #endif // GAMERECORD_H

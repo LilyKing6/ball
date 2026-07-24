@@ -47,7 +47,7 @@ public:
     int networkMyId() const { return m_networkMyId; }
     void setNetworkMyId(int id) { m_networkMyId = id; }
 
-    void addKill(const QString& victimName, float victimMass);
+    void addKill(const QString& victimName, float victimMass, bool isSplitKill = false, bool isVirusKill = false);
     void addFoodEaten();
     void addSplit();
     void addEject();
@@ -79,6 +79,8 @@ private:
     int m_splitCount = 0;
     int m_ejectCount = 0;
     int m_killCount = 0;
+    int m_splitKillCount = 0;
+    int m_virusKillCount = 0;
     float m_maxMass = 0;
     QVector<KillEvent> m_killTimeline;
     GameRecord m_lastRecord;

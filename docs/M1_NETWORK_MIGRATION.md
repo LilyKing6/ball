@@ -5,7 +5,7 @@
 
 ---
 
-> Verification update (2026-07-24): `go test -race ./... -count=1` passes. The server now spawns 10 AI players by default in the free-mode room. AI behavior includes wander, seek food, chase smaller players, flee bigger players, and split-kill, ported from the Qt `AIController`. The Qt client now keeps the last two snapshots and linearly interpolates player cell positions/masses between them, smoothing the 30Hz server updates. Live verification passed for `/health`, WebSocket `join -> welcome -> snapshot`, a Python smoke test confirming 11 players (1 human + 10 AI) in the snapshot, and a C++ unit test for `WorldSnapshot::lerp`. Remaining limitations are one fixed `default` room, no account system, and full-world snapshots.
+> Verification update (2026-07-24): `go test -race ./... -count=1` passes. The server now spawns 10 AI players by default in the free-mode room. The Qt client keeps the last two snapshots and linearly interpolates player cell positions/masses between them. Achievement counting for split kills and virus kills is now implemented: kills are classified by the killer's recent split and the victim's recent virus hit, persisted to `player_stats.total_split_kills` / `total_virus_kills`, and used to unlock "分裂大师" and "病毒猎人". Live verification passed for `/health`, WebSocket `join -> welcome -> snapshot`, a Python smoke test, and C++ unit tests for snapshot interpolation and kill classification. Remaining limitations are one fixed `default` room, no account system, and full-world snapshots.
 
 ## 1. 总览
 
@@ -224,6 +224,26 @@ AI 玩家使用负数 `playerID`，死亡后由 `world.Step` 自动复活，房�
 - 静态实体（食物、病毒、大豆）直接使用最新 snapshot
 - 玩家 cell 按索引插值；新增 cell 直接出现在 cur 位置
 - 本地玩家输入响应仍保持即时，不受影响
+
+### 成就计数补齐
+
+为使“分裂大师”“病毒猎人”等累计成就可解锁，击杀事件现在会分类并持久化到数据库。
+
+| 文件 | 说明 |
+|------|------|
+| `src/entity/Player.h/cpp` | 新增 `splitTimer` / `virusHitTimer`；`split()` 设置分裂窗口 |
+| `src/physics/PhysicsEngine.h/cpp` | `KillResult` 增加 `isSplitKill` / `isVirusKill` |
+| `src/engine/World.h/cpp` | `FrameKill` 增加标志；病毒碰撞设置受害者 `virusHitTimer` |
+| `src/engine/GameEngine.h/cpp` | 累计 `m_splitKillCount` / `m_virusKillCount`，写入 `GameRecord` |
+| `src/record/GameRecord.h` | `GameRecord` 新增字段；`KillEvent` 新增标志；`PlayerStats` 新增累计字段 |
+| `src/record/RecordManager.cpp` | 保存单局记录、更新累计统计、加载时读取新字段 |
+| `src/achievement/AchievementManager.cpp` | `checkCumulative()` 使用 `totalSplitKills` / `totalVirusKills` 检测成就 |
+| `src/storage/Schema.h` | 新表结构 + `ALTER TABLE` 兼容旧数据库 |
+| `tests/TestKillClassification.cpp` | 单元测试验证分裂击杀/病毒击杀/普通击杀分类 |
+
+分类规则：
+- **分裂击杀**：杀手在 1.5 秒内进行过分裂，期间造成的击杀
+- **病毒击杀**：受害者 2.0 秒内被刺球击中分裂过，期间被吃掉
 
 ---
 
@@ -676,6 +696,7 @@ if (m_reconnectOverlay) {
 
 - 服务端自由模式已支持分裂/吐球/融合/病毒/大豆，并默认填充 10 个 AI 玩家
 - 客户端已加入 Snapshot 插值，平滑 30Hz 更新
+- 成就计数已补齐：分裂击杀、病毒击杀可正确累计并解锁成就
 - 只有一个固定房间 `default`（M3 多房间支持）
 - 无账号系统，playerId 由服务端按连接顺序分配（M4 账户系统）
 - 无视野裁剪，服务端广播全量 snapshot（M5 性能优化）
@@ -688,9 +709,9 @@ if (m_reconnectOverlay) {
 
 1. ~~服务端自由模式加入 AI 填充玩家，并为 AI 行为添加规则测试。~~ ✅ 已完成
 2. ~~为客户端加入 snapshot 插值。~~ ✅ 已完成
-3. 增加房间生命周期、大厅/多房间和明确的模式选择。
-4. 为服务端加入视野裁剪。
-5. 补齐分裂击杀、病毒击杀等累计统计，使对应成就可解锁。
+3. ~~补齐分裂击杀、病毒击杀等累计统计，使对应成就可解锁。~~ ✅ 已完成
+4. 增加房间生命周期、大厅/多房间和明确的模式选择。
+5. 为服务端加入视野裁剪。
 
 ---
 

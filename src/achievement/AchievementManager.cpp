@@ -114,8 +114,10 @@ void AchievementManager::checkCumulative(const QString& playerId, const PlayerSt
             met = stats.totalPlayTime >= def.condValue;
             break;
         case AchievementCondition::TotalSplitKills:
+            met = stats.totalSplitKills >= static_cast<int>(def.condValue);
+            break;
         case AchievementCondition::TotalVirusKills:
-            // Not yet tracked in player_stats; will be 0
+            met = stats.totalVirusKills >= static_cast<int>(def.condValue);
             break;
         default:
             break;

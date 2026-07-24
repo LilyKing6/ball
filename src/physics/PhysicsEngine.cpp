@@ -51,11 +51,13 @@ int PhysicsEngine::checkPlayerCollision(Player& a, Player& b, QVector<KillResult
                 if (d < ca.radius() - cb.radius() * cfg.overlapRatioForEat) {
                     float victimMass = cb.mass;
                     QString victimName = b.name;
+                    bool isSplitKill = a.splitTimer > 0.0f;
+                    bool isVirusKill = b.virusHitTimer > 0.0f;
                     ca.mass += cb.mass;
                     if (ca.mass > cfg.maxMassPerCell) ca.mass = cfg.maxMassPerCell;
                     cb.alive = false;
                     kills++;
-                    outKills.append({victimName, victimMass});
+                    outKills.append({victimName, victimMass, isSplitKill, isVirusKill});
                 }
             }
         }
@@ -72,11 +74,13 @@ int PhysicsEngine::checkPlayerCollision(Player& a, Player& b, QVector<KillResult
                 if (d < cb.radius() - ca.radius() * cfg.overlapRatioForEat) {
                     float victimMass = ca.mass;
                     QString victimName = a.name;
+                    bool isSplitKill = b.splitTimer > 0.0f;
+                    bool isVirusKill = a.virusHitTimer > 0.0f;
                     cb.mass += ca.mass;
                     if (cb.mass > cfg.maxMassPerCell) cb.mass = cfg.maxMassPerCell;
                     ca.alive = false;
                     kills++;
-                    outKills.append({victimName, victimMass});
+                    outKills.append({victimName, victimMass, isSplitKill, isVirusKill});
                 }
             }
         }

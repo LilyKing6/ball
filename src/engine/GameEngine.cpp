@@ -185,7 +185,7 @@ void GameEngine::update(float dt) {
 
     m_foodEaten += m_world.frameFoodEaten();
     for (const auto& fk : m_world.frameKills()) {
-        addKill(fk.victimName, fk.victimMass);
+        addKill(fk.victimName, fk.victimMass, fk.isSplitKill, fk.isVirusKill);
     }
 
     // Reset counters on respawn
@@ -194,6 +194,8 @@ void GameEngine::update(float dt) {
         m_splitCount = 0;
         m_ejectCount = 0;
         m_killCount = 0;
+        m_splitKillCount = 0;
+        m_virusKillCount = 0;
         m_maxMass = 0;
         m_killTimeline.clear();
         m_gameTimer.restart();
@@ -292,9 +294,11 @@ void GameEngine::clearPendingInputFlags() {
     m_pendingInput.wantEject = false;
 }
 
-void GameEngine::addKill(const QString& victimName, float victimMass) {
+void GameEngine::addKill(const QString& victimName, float victimMass, bool isSplitKill, bool isVirusKill) {
     m_killCount++;
-    m_killTimeline.append({victimName, m_gameTimer.elapsed() / 1000.0f, victimMass});
+    if (isSplitKill) m_splitKillCount++;
+    if (isVirusKill) m_virusKillCount++;
+    m_killTimeline.append({victimName, m_gameTimer.elapsed() / 1000.0f, victimMass, isSplitKill, isVirusKill});
     AudioManager::instance().playSfx("kill");
 }
 
@@ -368,6 +372,8 @@ void GameEngine::saveRecord() {
     rec.foodEaten = m_foodEaten;
     rec.splitCount = m_splitCount;
     rec.ejectCount = m_ejectCount;
+    rec.splitKillCount = m_splitKillCount;
+    rec.virusKillCount = m_virusKillCount;
     rec.killTimeline = m_killTimeline;
     rec.totalPlayers = m_world.players().size();
     rec.mode = "single";

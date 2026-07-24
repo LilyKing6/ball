@@ -15,6 +15,8 @@
 struct FrameKill {
     QString victimName;
     float victimMass;
+    bool isSplitKill = false;
+    bool isVirusKill = false;
 };
 
 class Spawner;

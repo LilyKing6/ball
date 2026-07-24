@@ -12,6 +12,8 @@ class World;
 struct KillResult {
     QString victimName;
     float victimMass;
+    bool isSplitKill = false;
+    bool isVirusKill = false;
 };
 
 class PhysicsEngine {

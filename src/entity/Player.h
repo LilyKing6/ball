@@ -32,6 +32,10 @@ public:
     int team = 0; // 0=none, 1=TeamA, 2=TeamB
     bool isAI = false;
 
+    // 成就统计用：分裂/被刺球击中后的有效窗口
+    float splitTimer = 0.0f;      // >0 表示刚分裂，期间造成的击杀计为分裂击杀
+    float virusHitTimer = 0.0f;   // >0 表示刚被刺球击中分裂，期间死亡计为病毒击杀
+
     // 模式倍率（由 World::init 从 GameModeConfig 设置）
     float speedMul = 1.0f;
     float splitVelocityMul = 1.0f;

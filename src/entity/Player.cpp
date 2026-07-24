@@ -44,6 +44,9 @@ void Player::split(Vec2 direction, QVector<Cell>& newCells) {
     auto& cfg = Config::instance();
     if (!canSplit()) return;
 
+    // 标记分裂窗口，用于成就统计
+    splitTimer = 1.5f;
+
     float effSplitVel = cfg.splitVelocity * splitVelocityMul;
     float effSplitCD = cfg.splitCooldown * splitCooldownMul;
     float effMergeCD = cfg.mergeCooldown * mergeCooldownMul;
@@ -132,6 +135,15 @@ void Player::ejectToward(Vec2 worldTarget, QVector<Spore>& ejected) {
 
 void Player::update(float dt) {
     auto& cfg = Config::instance();
+
+    if (splitTimer > 0.0f) {
+        splitTimer -= dt;
+        if (splitTimer < 0.0f) splitTimer = 0.0f;
+    }
+    if (virusHitTimer > 0.0f) {
+        virusHitTimer -= dt;
+        if (virusHitTimer < 0.0f) virusHitTimer = 0.0f;
+    }
 
     m_ejectCooldown -= dt;
 

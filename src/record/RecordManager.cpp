@@ -31,9 +31,10 @@ bool RecordManager::saveRecord(const QString& playerId, const GameRecord& rec) {
     QString recordId = QUuid::createUuid().toString(QUuid::WithoutBraces);
     q.prepare(R"(
         INSERT INTO game_record (record_id, player_id, duration, final_mass, max_mass,
-            kill_count, death_cause, killed_by, food_eaten, split_count, eject_count,
-            elo_change, rank_in_match, total_players, mode, season_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            kill_count, split_kill_count, virus_kill_count, death_cause, killed_by,
+            food_eaten, split_count, eject_count, elo_change, rank_in_match,
+            total_players, mode, season_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     )");
     q.addBindValue(recordId);
     q.addBindValue(playerId);
@@ -41,6 +42,8 @@ bool RecordManager::saveRecord(const QString& playerId, const GameRecord& rec) {
     q.addBindValue(rec.finalMass);
     q.addBindValue(rec.maxMass);
     q.addBindValue(rec.killCount);
+    q.addBindValue(rec.splitKillCount);
+    q.addBindValue(rec.virusKillCount);
     q.addBindValue(rec.deathCause);
     q.addBindValue(rec.killedBy);
     q.addBindValue(rec.foodEaten);
@@ -59,11 +62,13 @@ bool RecordManager::saveRecord(const QString& playerId, const GameRecord& rec) {
 
     for (auto& k : rec.killTimeline) {
         QSqlQuery kq(db);
-        kq.prepare("INSERT INTO kill_detail (record_id, victim_name, kill_time, victim_mass) VALUES (?, ?, ?, ?)");
+        kq.prepare("INSERT INTO kill_detail (record_id, victim_name, kill_time, victim_mass, is_split_kill, is_virus_kill) VALUES (?, ?, ?, ?, ?, ?)");
         kq.addBindValue(recordId);
         kq.addBindValue(k.victimName);
         kq.addBindValue(k.killTime);
         kq.addBindValue(k.victimMass);
+        kq.addBindValue(k.isSplitKill ? 1 : 0);
+        kq.addBindValue(k.isVirusKill ? 1 : 0);
         kq.exec();
     }
 
@@ -92,8 +97,8 @@ bool RecordManager::updateStats(const QString& playerId, const GameRecord& rec) 
     q.prepare(R"(
         INSERT INTO player_stats (player_id, total_games, total_kills, total_deaths,
             best_mass, best_rank, longest_survival, total_food_eaten, total_play_time,
-            best_streak, current_streak)
-        VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            best_streak, current_streak, total_split_kills, total_virus_kills)
+        VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(player_id) DO UPDATE SET
             total_games = total_games + 1,
             total_kills = total_kills + ?,
@@ -104,7 +109,9 @@ bool RecordManager::updateStats(const QString& playerId, const GameRecord& rec) 
             total_food_eaten = total_food_eaten + ?,
             total_play_time = total_play_time + ?,
             best_streak = MAX(best_streak, ?),
-            current_streak = ?
+            current_streak = ?,
+            total_split_kills = total_split_kills + ?,
+            total_virus_kills = total_virus_kills + ?
     )");
 
     q.addBindValue(playerId);
@@ -117,6 +124,8 @@ bool RecordManager::updateStats(const QString& playerId, const GameRecord& rec) 
     q.addBindValue(rec.duration);
     q.addBindValue(newBest);
     q.addBindValue(newStreak);
+    q.addBindValue(rec.splitKillCount);
+    q.addBindValue(rec.virusKillCount);
     // UPDATE values
     q.addBindValue(rec.killCount);
     q.addBindValue(deaths);
@@ -127,6 +136,8 @@ bool RecordManager::updateStats(const QString& playerId, const GameRecord& rec) 
     q.addBindValue(rec.duration);
     q.addBindValue(newBest);
     q.addBindValue(newStreak);
+    q.addBindValue(rec.splitKillCount);
+    q.addBindValue(rec.virusKillCount);
 
     if (!q.exec()) {
         qWarning() << "updateStats:" << q.lastError().text();
@@ -159,6 +170,8 @@ QVector<GameRecord> RecordManager::loadRecords(const QString& playerId, int limi
             r.finalMass = q.value("final_mass").toFloat();
             r.maxMass = q.value("max_mass").toFloat();
             r.killCount = q.value("kill_count").toInt();
+            r.splitKillCount = q.value("split_kill_count").toInt();
+            r.virusKillCount = q.value("virus_kill_count").toInt();
             r.deathCause = q.value("death_cause").toString();
             r.killedBy = q.value("killed_by").toString();
             r.foodEaten = q.value("food_eaten").toInt();
@@ -192,6 +205,8 @@ PlayerStats RecordManager::loadStats(const QString& playerId) {
         s.totalPlayTime = q.value("total_play_time").toFloat();
         s.bestStreak = q.value("best_streak").toInt();
         s.currentStreak = q.value("current_streak").toInt();
+        s.totalSplitKills = q.value("total_split_kills").toInt();
+        s.totalVirusKills = q.value("total_virus_kills").toInt();
     }
     return s;
 }

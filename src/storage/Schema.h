@@ -18,34 +18,46 @@ inline QString createTables() {
         );
 
         CREATE TABLE IF NOT EXISTS game_record (
-            record_id     TEXT PRIMARY KEY,
-            player_id     TEXT,
-            timestamp     DATETIME DEFAULT CURRENT_TIMESTAMP,
-            duration      REAL,
-            final_mass    REAL,
-            max_mass      REAL,
-            kill_count    INTEGER DEFAULT 0,
-            death_cause   TEXT,
-            killed_by     TEXT,
-            food_eaten    INTEGER DEFAULT 0,
-            split_count   INTEGER DEFAULT 0,
-            eject_count   INTEGER DEFAULT 0,
-            elo_change    INTEGER DEFAULT 0,
-            rank_in_match INTEGER,
-            total_players INTEGER,
-            mode          TEXT DEFAULT 'single',
-            season_id     TEXT,
+            record_id         TEXT PRIMARY KEY,
+            player_id         TEXT,
+            timestamp         DATETIME DEFAULT CURRENT_TIMESTAMP,
+            duration          REAL,
+            final_mass        REAL,
+            max_mass          REAL,
+            kill_count        INTEGER DEFAULT 0,
+            split_kill_count  INTEGER DEFAULT 0,
+            virus_kill_count  INTEGER DEFAULT 0,
+            death_cause       TEXT,
+            killed_by         TEXT,
+            food_eaten        INTEGER DEFAULT 0,
+            split_count       INTEGER DEFAULT 0,
+            eject_count       INTEGER DEFAULT 0,
+            elo_change        INTEGER DEFAULT 0,
+            rank_in_match     INTEGER,
+            total_players     INTEGER,
+            mode              TEXT DEFAULT 'single',
+            season_id         TEXT,
             FOREIGN KEY(player_id) REFERENCES player_profile(player_id)
         );
 
+        -- 兼容旧数据库：如果列不存在则添加
+        ALTER TABLE game_record ADD COLUMN split_kill_count INTEGER DEFAULT 0;
+        ALTER TABLE game_record ADD COLUMN virus_kill_count INTEGER DEFAULT 0;
+
         CREATE TABLE IF NOT EXISTS kill_detail (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            record_id     TEXT,
-            victim_name   TEXT,
-            kill_time     REAL,
-            victim_mass   REAL,
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            record_id       TEXT,
+            victim_name     TEXT,
+            kill_time       REAL,
+            victim_mass     REAL,
+            is_split_kill   INTEGER DEFAULT 0,
+            is_virus_kill   INTEGER DEFAULT 0,
             FOREIGN KEY(record_id) REFERENCES game_record(record_id)
         );
+
+        -- 兼容旧数据库：如果列不存在则添加
+        ALTER TABLE kill_detail ADD COLUMN is_split_kill INTEGER DEFAULT 0;
+        ALTER TABLE kill_detail ADD COLUMN is_virus_kill INTEGER DEFAULT 0;
 
         CREATE TABLE IF NOT EXISTS season_record (
             season_id     TEXT,
