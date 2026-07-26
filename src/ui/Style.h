@@ -60,6 +60,9 @@ QString listWidgetStyle();
 void drawGradientTitle(QPainter& p, const QString& text, const QRect& rect,
                        const QList<QColor>& colors, int fontSize = 48);
 
+// 暗角 vignette 效果
+void drawVignette(QPainter& p, const QRect& rect, float intensity = 0.6f);
+
 // ========== 帮助函数 ==========
 QString rgba(const QColor& c, int alpha);
 QString rgbaF(const QColor& c, float alpha);

@@ -264,4 +264,12 @@ void drawGradientTitle(QPainter& p, const QString& text, const QRect& rect,
     p.fillPath(path, grad);
 }
 
+void drawVignette(QPainter& p, const QRect& rect, float intensity) {
+    QRadialGradient vig(rect.center(), qMax(rect.width(), rect.height()) * 0.6f);
+    vig.setColorAt(0.0, QColor(0, 0, 0, 0));
+    vig.setColorAt(0.5, QColor(0, 0, 0, static_cast<int>(intensity * 80)));
+    vig.setColorAt(1.0, QColor(0, 0, 0, static_cast<int>(intensity * 200)));
+    p.fillRect(rect, vig);
+}
+
 } // namespace Style

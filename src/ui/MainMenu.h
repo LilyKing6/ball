@@ -9,33 +9,23 @@
 #include <QVector>
 #include <QProgressBar>
 
-// 漂浮球（远景装饰）
+// 远景漂浮球装饰
 struct MenuBall {
     QPointF pos;
     QPointF vel;
     float radius;
     QColor color;
+    float alpha;   // 透明度系数 (0.3~1.0)
 };
 
-// 星点
+// 闪烁星点
 struct Star {
     QPointF pos;
     float size;
     float baseAlpha;
-    float phase;      // 闪烁相位偏移
-    float speed;      // 闪烁速度
-    QColor color;
-};
-
-// 流星
-struct Meteor {
-    QPointF start;
-    QPointF end;
-    QPointF current;
-    float progress;   // 0.0 → 1.0
-    float length;
-    float duration;
-    bool active;
+    float phase;
+    float speed;
+    QColor color;      // 支持彩色星点
 };
 
 class MainMenu : public QWidget {
@@ -81,29 +71,19 @@ private:
 
     // 动画数据
     QTimer* m_animTimer = nullptr;
-    QTimer* m_meteorTimer = nullptr;
     QVector<MenuBall> m_balls;
     QVector<Star> m_stars;
-    QVector<Meteor> m_meteors;
     float m_time = 0.0f;
+    float m_pulsePhase = 0.0f;
     bool m_layoutInitialized = false;
 
-    // 初始化方法
     void initStars();
     void initBalls();
-    void initMeteor();
-
-    // 更新方法
-    void updateStars(float dt);
-    void updateMeteors(float dt);
     void updateBalls();
-
-    // 绘制方法
+    void drawBackground(QPainter& p);
     void drawStars(QPainter& p);
-    void drawMeteors(QPainter& p);
     void drawTitle(QPainter& p);
 
-    // 布局方法
     void setupLeftPanel();
     void setupRightPanel();
 };

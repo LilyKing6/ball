@@ -10,6 +10,8 @@
 #include <QIntValidator>
 #include <QGraphicsDropShadowEffect>
 #include <QScrollArea>
+#include <QEvent>
+#include <QMouseEvent>
 
 ModeSelectWindow::ModeSelectWindow(QWidget* parent)
     : SubWindow("选择模式", parent, 520, 560) {
@@ -18,7 +20,6 @@ ModeSelectWindow::ModeSelectWindow(QWidget* parent)
     l->setSpacing(0);
     l->setContentsMargins(0, 0, 0, 0);
 
-    // 滚动区域
     auto* scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
@@ -27,14 +28,10 @@ ModeSelectWindow::ModeSelectWindow(QWidget* parent)
     scroll->setStyleSheet(R"(
         QScrollArea { background: transparent; border: none; }
         QScrollBar:vertical {
-            background: rgba(0,0,0,0.2);
-            width: 8px;
-            border-radius: 4px;
+            background: rgba(0,0,0,0.2); width: 8px; border-radius: 4px;
         }
         QScrollBar::handle:vertical {
-            background: rgba(255,255,255,0.25);
-            border-radius: 4px;
-            min-height: 40px;
+            background: rgba(255,255,255,0.25); border-radius: 4px; min-height: 40px;
         }
         QScrollBar::handle:vertical:hover { background: rgba(255,255,255,0.35); }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
@@ -43,35 +40,48 @@ ModeSelectWindow::ModeSelectWindow(QWidget* parent)
     auto* contentWidget = new QWidget(this);
     contentWidget->setStyleSheet("background: transparent;");
     auto* contentLayout = new QVBoxLayout(contentWidget);
-    contentLayout->setSpacing(14);
-    contentLayout->setContentsMargins(22, 18, 22, 22);
+    contentLayout->setSpacing(16);
+    contentLayout->setContentsMargins(26, 22, 26, 26);
 
     auto* title = new QLabel("选择游戏模式", this);
-    title->setStyleSheet(Style::labelStyle(Style::accentGold(), 20, true));
+    title->setStyleSheet(Style::labelStyle(Style::accentGold(), 22, true));
     title->setAlignment(Qt::AlignCenter);
     contentLayout->addWidget(title);
 
-    // 2x2 模式卡片网格
+    auto* desc = new QLabel("挑选一个模式开始战斗", this);
+    desc->setStyleSheet(Style::labelStyle(Style::textMuted(), 13, false));
+    desc->setAlignment(Qt::AlignCenter);
+    contentLayout->addWidget(desc);
+
+    contentLayout->addSpacing(4);
+
     auto* grid = new QGridLayout();
-    grid->setSpacing(12);
+    grid->setSpacing(14);
     grid->setContentsMargins(0, 0, 0, 0);
 
-    auto addCard = [&](GameMode mode, const QString& icon, const QString& accent, int row, int col) {
-        auto* card = makeModeCard(getModeConfig(mode), mode, icon, accent);
-        grid->addWidget(card, row, col);
+    struct CardDef {
+        GameMode mode;
+        QString label;   // short symbol
+        QString accent;
+        int row, col;
     };
 
-    addCard(GameMode::FreeMode,    "◉", "#4FC3F7", 0, 0);
-    addCard(GameMode::SpeedFree,   "⚡", "#FFD700", 0, 1);
-    addCard(GameMode::TeamMode,    "⚔", "#FF6B6B", 1, 0);
-    addCard(GameMode::BattleRoyale,"⚠", "#9C27B0", 1, 1);
+    CardDef cards[] = {
+        {GameMode::FreeMode,     "自\n由", "#4FC3F7", 0, 0},
+        {GameMode::SpeedFree,    "极\n速", "#FFD700", 0, 1},
+        {GameMode::TeamMode,     "团\n战", "#FF6B6B", 1, 0},
+        {GameMode::BattleRoyale, "逃\n杀", "#CE93D8", 1, 1},
+    };
+
+    for (auto& cd : cards) {
+        auto* card = makeModeCard(getModeConfig(cd.mode), cd.mode, cd.label, cd.accent);
+        grid->addWidget(card, cd.row, cd.col);
+    }
 
     contentLayout->addLayout(grid);
 
-    // 联网对战卡片（全宽）
     auto* netCard = makeNetworkCard();
     contentLayout->addWidget(netCard);
-
     contentLayout->addStretch();
 
     scroll->setWidget(contentWidget);
@@ -79,64 +89,73 @@ ModeSelectWindow::ModeSelectWindow(QWidget* parent)
 }
 
 QFrame* ModeSelectWindow::makeModeCard(const GameModeConfig& cfg, GameMode mode,
-                                       const QString& icon, const QString& accent) {
+                                       const QString& label, const QString& accent) {
     auto* card = new QFrame(this);
-    card->setFixedHeight(118);
+    card->setFixedHeight(128);
     card->setCursor(Qt::PointingHandCursor);
     card->setStyleSheet(QString(R"(
-        QFrame {
-            background: rgba(22,33,62,0.75);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 14px;
+        QFrame#modeCard {
+            background: rgba(18,28,52,0.80);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 16px;
         }
-        QFrame:hover {
-            background: rgba(22,33,62,0.92);
+        QFrame#modeCard:hover {
+            background: rgba(18,28,52,0.94);
             border-color: %1;
         }
     )").arg(accent));
+    card->setObjectName("modeCard");
 
     auto* shadow = new QGraphicsDropShadowEffect(card);
-    shadow->setBlurRadius(16);
-    shadow->setColor(QColor(0, 0, 0, 80));
-    shadow->setOffset(0, 4);
+    shadow->setBlurRadius(20);
+    shadow->setColor(QColor(0, 0, 0, 100));
+    shadow->setOffset(0, 6);
     card->setGraphicsEffect(shadow);
 
     auto* mainLayout = new QHBoxLayout(card);
-    mainLayout->setContentsMargins(14, 10, 14, 10);
-    mainLayout->setSpacing(12);
+    mainLayout->setContentsMargins(16, 14, 16, 14);
+    mainLayout->setSpacing(14);
 
-    // 左侧图标
-    auto* iconLabel = new QLabel(icon, card);
-    iconLabel->setFixedSize(48, 48);
-    iconLabel->setAlignment(Qt::AlignCenter);
-    iconLabel->setStyleSheet(QString(R"(
-        QLabel {
-            background: %1;
-            border-radius: 24px;
-            font-size: 22px;
-            color: white;
+    // 左侧图标区域 - 纯 CSS 无 emoji
+    auto* iconFrame = new QFrame(card);
+    iconFrame->setFixedSize(56, 56);
+    iconFrame->setStyleSheet(QString(R"(
+        QFrame {
+            background: qradialgradient(cx:0.4,cy:0.35,radius:0.7,
+                stop:0 %1, stop:1 %2);
+            border-radius: 16px;
         }
-    )").arg(accent));
-    mainLayout->addWidget(iconLabel);
+    )").arg(accent).arg(accent + "55"));
+    auto* iconLayout = new QVBoxLayout(iconFrame);
+    iconLayout->setContentsMargins(0, 0, 0, 0);
+    iconLayout->setSpacing(0);
+    iconFrame->setLayout(iconLayout);
+    auto* iconLabel = new QLabel(label, iconFrame);
+    iconLabel->setAlignment(Qt::AlignCenter);
+    iconLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: white; background: transparent;");
+    iconLayout->addWidget(iconLabel);
+    mainLayout->addWidget(iconFrame);
 
     // 右侧文本
     auto* textLayout = new QVBoxLayout();
-    textLayout->setSpacing(3);
+    textLayout->setSpacing(4);
     textLayout->setContentsMargins(0, 0, 0, 0);
 
     auto* nameLabel = new QLabel(cfg.name, card);
-    nameLabel->setStyleSheet(QString("font-size: 16px; font-weight: bold; color: %1; background: transparent;").arg(accent));
+    nameLabel->setStyleSheet(QString("font-size: 17px; font-weight: bold; color: %1; background: transparent;").arg(accent));
     textLayout->addWidget(nameLabel);
 
     auto* descLabel = new QLabel(cfg.description, card);
-    descLabel->setStyleSheet("font-size: 11px; color: #888; background: transparent;");
+    descLabel->setStyleSheet("font-size: 12px; color: #9090a0; background: transparent;");
     descLabel->setWordWrap(true);
     textLayout->addWidget(descLabel);
 
-    auto* statsLabel = new QLabel(QString("地图 %1×%2 · AI %3 · 限时 %4分钟")
-        .arg((int)cfg.worldWidth).arg((int)cfg.worldHeight)
-        .arg(cfg.aiCount).arg(cfg.timeLimitSeconds / 60), card);
-    statsLabel->setStyleSheet("font-size: 10px; color: #666; background: transparent;");
+    auto* statsLabel = new QLabel(
+        QString("地图 %1×%2  ·  AI ×%3  ·  %4分钟")
+            .arg((int)cfg.worldWidth).arg((int)cfg.worldHeight)
+            .arg(cfg.aiCount).arg(cfg.timeLimitSeconds / 60),
+        card);
+    statsLabel->setStyleSheet("font-size: 11px; color: #5a5a7a; background: transparent;");
     textLayout->addWidget(statsLabel);
 
     mainLayout->addLayout(textLayout, 1);
@@ -149,54 +168,63 @@ QFrame* ModeSelectWindow::makeModeCard(const GameModeConfig& cfg, GameMode mode,
 
 QFrame* ModeSelectWindow::makeNetworkCard() {
     auto* card = new QFrame(this);
-    card->setFixedHeight(82);
+    card->setFixedHeight(88);
     card->setCursor(Qt::PointingHandCursor);
+    card->setObjectName("netCard");
     card->setStyleSheet(R"(
-        QFrame {
-            background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 rgba(79,195,247,0.12),stop:1 rgba(155,89,182,0.08));
-            border: 1px solid rgba(79,195,247,0.25);
-            border-radius: 14px;
+        QFrame#netCard {
+            background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                stop:0 rgba(79,195,247,0.10), stop:1 rgba(155,89,182,0.06));
+            border: 1px solid rgba(79,195,247,0.20);
+            border-radius: 16px;
         }
-        QFrame:hover {
-            background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 rgba(79,195,247,0.20),stop:1 rgba(155,89,182,0.14));
-            border-color: rgba(79,195,247,0.45);
+        QFrame#netCard:hover {
+            background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                stop:0 rgba(79,195,247,0.18), stop:1 rgba(155,89,182,0.12));
+            border-color: rgba(79,195,247,0.40);
         }
     )");
 
     auto* shadow = new QGraphicsDropShadowEffect(card);
-    shadow->setBlurRadius(16);
-    shadow->setColor(QColor(0, 0, 0, 80));
-    shadow->setOffset(0, 4);
+    shadow->setBlurRadius(20);
+    shadow->setColor(QColor(0, 0, 0, 100));
+    shadow->setOffset(0, 6);
     card->setGraphicsEffect(shadow);
 
     auto* mainLayout = new QHBoxLayout(card);
-    mainLayout->setContentsMargins(14, 10, 14, 10);
-    mainLayout->setSpacing(12);
+    mainLayout->setContentsMargins(16, 14, 16, 14);
+    mainLayout->setSpacing(14);
 
-    auto* iconLabel = new QLabel("🌐", card);
-    iconLabel->setFixedSize(44, 44);
-    iconLabel->setAlignment(Qt::AlignCenter);
-    iconLabel->setStyleSheet(R"(
-        QLabel {
-            background: qradialgradient(cx:0.5,cy:0.5,radius:0.8,
-                stop:0 rgba(79,195,247,0.5), stop:1 rgba(79,195,247,0.1));
-            border-radius: 22px;
-            font-size: 20px;
-            color: white;
+    // 图标
+    auto* iconFrame = new QFrame(card);
+    iconFrame->setFixedSize(52, 52);
+    iconFrame->setStyleSheet(R"(
+        QFrame {
+            background: qradialgradient(cx:0.4,cy:0.35,radius:0.7,
+                stop:0 rgba(79,195,247,0.6), stop:1 rgba(79,195,247,0.1));
+            border-radius: 14px;
         }
     )");
-    mainLayout->addWidget(iconLabel);
+    auto* iconLayout = new QVBoxLayout(iconFrame);
+    iconLayout->setContentsMargins(0, 0, 0, 0);
+    iconLayout->setSpacing(0);
+    iconFrame->setLayout(iconLayout);
+    auto* iconLabel = new QLabel("联\n网", iconFrame);
+    iconLabel->setAlignment(Qt::AlignCenter);
+    iconLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: white; background: transparent;");
+    iconLayout->addWidget(iconLabel);
+    mainLayout->addWidget(iconFrame);
 
     auto* textLayout = new QVBoxLayout();
-    textLayout->setSpacing(3);
+    textLayout->setSpacing(4);
     textLayout->setContentsMargins(0, 0, 0, 0);
 
     auto* nameLabel = new QLabel("联网对战", card);
-    nameLabel->setStyleSheet("font-size: 16px; font-weight: bold; color: #4FC3F7; background: transparent;");
+    nameLabel->setStyleSheet("font-size: 17px; font-weight: bold; color: #4FC3F7; background: transparent;");
     textLayout->addWidget(nameLabel);
 
     auto* descLabel = new QLabel("连接 Go 服务端，与好友或其他玩家实时对战", card);
-    descLabel->setStyleSheet("font-size: 11px; color: #888; background: transparent;");
+    descLabel->setStyleSheet("font-size: 12px; color: #9090a0; background: transparent;");
     descLabel->setWordWrap(true);
     textLayout->addWidget(descLabel);
 

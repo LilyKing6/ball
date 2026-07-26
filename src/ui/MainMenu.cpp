@@ -17,76 +17,71 @@
 MainMenu::MainMenu(QWidget* parent) : QWidget(parent) {
     setAutoFillBackground(true);
 
-    // 初始化动画数据
     initStars();
     initBalls();
 
-    // 动画定时器 (30 FPS)
     m_animTimer = new QTimer(this);
     connect(m_animTimer, &QTimer::timeout, this, [this]() {
-        m_time += 0.033f;
-        updateStars(0.033f);
-        updateMeteors(0.033f);
+        float dt = 0.033f;
+        m_time += dt;
+        m_pulsePhase += dt * 2.5f;
+        if (m_pulsePhase > 3.14159f * 2) m_pulsePhase -= 3.14159f * 2;
         updateBalls();
+
+        // 脉冲动画：调整阴影大小
+        if (m_startBtn) {
+            auto* shadow = qobject_cast<QGraphicsDropShadowEffect*>(m_startBtn->graphicsEffect());
+            if (shadow) {
+                float pulse = 1.0f + 0.15f * qSin(m_pulsePhase);
+                shadow->setBlurRadius(24 * pulse);
+            }
+        }
         update();
     });
     m_animTimer->start(33);
-
-    // 流星生成定时器
-    m_meteorTimer = new QTimer(this);
-    connect(m_meteorTimer, &QTimer::timeout, this, [this]() {
-        if (randFloat(0, 1) < 0.3f) { // 30% 概率生成
-            initMeteor();
-        }
-        m_meteorTimer->setInterval(3000 + randInt(0, 5000)); // 3-8秒
-    });
-    m_meteorTimer->start(4000);
 }
 
 void MainMenu::refreshLayout() {
     if (m_layoutInitialized) return;
     m_layoutInitialized = true;
 
-    // 创建左右面板
-    setupLeftPanel();
     setupRightPanel();
-
-    // 初始刷新数据
+    setupLeftPanel();
     refreshRank();
 }
 
 void MainMenu::setupLeftPanel() {
     m_leftPanel = new QWidget(this);
     m_leftPanel->setAttribute(Qt::WA_TranslucentBackground);
-    m_leftPanel->setFixedWidth(280);
+    m_leftPanel->setFixedSize(300, 460);
     m_leftPanel->setStyleSheet(Style::glassPanelStyle());
 
     auto* shadow = new QGraphicsDropShadowEffect(m_leftPanel);
-    shadow->setBlurRadius(30);
-    shadow->setColor(QColor(0, 0, 0, 160));
-    shadow->setOffset(0, 8);
+    shadow->setBlurRadius(40);
+    shadow->setColor(QColor(0, 0, 0, 180));
+    shadow->setOffset(0, 12);
     m_leftPanel->setGraphicsEffect(shadow);
 
     auto* layout = new QVBoxLayout(m_leftPanel);
-    layout->setContentsMargins(24, 28, 24, 28);
-    layout->setSpacing(14);
+    layout->setContentsMargins(28, 32, 28, 28);
+    layout->setSpacing(16);
     layout->setAlignment(Qt::AlignTop);
 
-    // 头像占位
+    // 头像 - 显示昵称首字
     m_avatarLabel = new QLabel(m_leftPanel);
-    m_avatarLabel->setFixedSize(88, 88);
+    m_avatarLabel->setFixedSize(96, 96);
     m_avatarLabel->setAlignment(Qt::AlignCenter);
-    m_avatarLabel->setText("★");
     m_avatarLabel->setStyleSheet(R"(
         QLabel {
-            background: qradialgradient(cx:0.5,cy:0.5,radius:0.8,
-                stop:0 rgba(255,215,0,0.25),
-                stop:0.5 rgba(255,215,0,0.08),
+            background: qradialgradient(cx:0.4,cy:0.35,radius:0.7,
+                stop:0 rgba(255,215,0,0.35),
+                stop:0.6 rgba(255,180,0,0.15),
                 stop:1 rgba(255,215,0,0.0));
-            border: 2px solid rgba(255,215,0,0.35);
-            border-radius: 44px;
-            font-size: 36px;
-            color: #FFD700;
+            border: 2px solid rgba(255,215,0,0.4);
+            border-radius: 48px;
+            font-size: 42px;
+            font-weight: bold;
+            color: #FFE066;
         }
     )");
     layout->addWidget(m_avatarLabel, 0, Qt::AlignCenter);
@@ -96,7 +91,7 @@ void MainMenu::setupLeftPanel() {
     m_nameInput->setPlaceholderText("输入你的昵称...");
     m_nameInput->setText("Player");
     m_nameInput->setMaxLength(12);
-    m_nameInput->setFixedHeight(42);
+    m_nameInput->setFixedHeight(44);
     m_nameInput->setAlignment(Qt::AlignCenter);
     m_nameInput->setStyleSheet(Style::lineEditStyle());
     layout->addWidget(m_nameInput);
@@ -104,14 +99,14 @@ void MainMenu::setupLeftPanel() {
     // 分隔线
     auto* separator = new QFrame(m_leftPanel);
     separator->setFixedHeight(1);
-    separator->setStyleSheet("background: rgba(255,255,255,0.1);");
-    layout->addSpacing(8);
+    separator->setStyleSheet("background: rgba(255,255,255,0.1); border: none;");
+    layout->addSpacing(4);
     layout->addWidget(separator);
-    layout->addSpacing(8);
+    layout->addSpacing(4);
 
     // 段位标签
     m_tierLabel = new QLabel("青铜 III", m_leftPanel);
-    m_tierLabel->setStyleSheet(Style::labelStyle(Style::accentGold(), 24, true));
+    m_tierLabel->setStyleSheet(Style::labelStyle(Style::accentGold(), 26, true));
     m_tierLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(m_tierLabel);
 
@@ -126,8 +121,10 @@ void MainMenu::setupLeftPanel() {
     m_eloProgress->setRange(0, 1000);
     m_eloProgress->setValue(250);
     m_eloProgress->setTextVisible(false);
-    m_eloProgress->setFixedHeight(12);
-    m_eloProgress->setStyleSheet(Style::sliderStyle(Style::accentGold()) + "QProgressBar { background: rgba(255,255,255,0.1); border-radius: 6px; } QProgressBar::chunk { border-radius: 6px; background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #CD7F32,stop:1 #FFD700); }");
+    m_eloProgress->setFixedHeight(14);
+    m_eloProgress->setStyleSheet(
+        "QProgressBar { background: rgba(255,255,255,0.08); border: none; border-radius: 7px; }"
+        "QProgressBar::chunk { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #CD7F32,stop:1 #FFD700); border-radius: 7px; }");
     layout->addWidget(m_eloProgress);
 
     // 进度文字
@@ -136,7 +133,7 @@ void MainMenu::setupLeftPanel() {
     m_progressText->setAlignment(Qt::AlignCenter);
     layout->addWidget(m_progressText);
 
-    layout->addSpacing(12);
+    layout->addSpacing(8);
 
     // 赛季信息
     m_seasonLabel = new QLabel("S1 赛季 · 剩余 28 天", m_leftPanel);
@@ -150,80 +147,110 @@ void MainMenu::setupLeftPanel() {
 void MainMenu::setupRightPanel() {
     m_rightPanel = new QWidget(this);
     m_rightPanel->setAttribute(Qt::WA_TranslucentBackground);
-    m_rightPanel->setFixedWidth(340);
+    m_rightPanel->setFixedSize(380, 520);
     m_rightPanel->setStyleSheet(Style::glassPanelStyle());
 
     auto* shadow = new QGraphicsDropShadowEffect(m_rightPanel);
-    shadow->setBlurRadius(30);
-    shadow->setColor(QColor(0, 0, 0, 160));
-    shadow->setOffset(0, 8);
+    shadow->setBlurRadius(40);
+    shadow->setColor(QColor(0, 0, 0, 180));
+    shadow->setOffset(0, 12);
     m_rightPanel->setGraphicsEffect(shadow);
 
     auto* layout = new QVBoxLayout(m_rightPanel);
-    layout->setContentsMargins(24, 28, 24, 28);
-    layout->setSpacing(16);
+    layout->setContentsMargins(30, 36, 30, 30);
+    layout->setSpacing(14);
     layout->setAlignment(Qt::AlignVCenter);
 
     // 标题区域占位
     m_titleLabel = new QLabel("", m_rightPanel);
-    m_titleLabel->setFixedHeight(70);
+    m_titleLabel->setFixedHeight(84);
     m_titleLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(m_titleLabel);
 
-    // 副标题
-    m_subtitleLabel = new QLabel("AGAR.IO CLONE", m_rightPanel);
-    m_subtitleLabel->setStyleSheet("font-size: 13px; color: #666; background: transparent; letter-spacing: 2px;");
+    // 口号
+    m_subtitleLabel = new QLabel("大鱼吃小鱼，吞并天下", m_rightPanel);
+    m_subtitleLabel->setStyleSheet(
+        "font-size: 14px; color: #5a5a7a; background: transparent; letter-spacing: 3px;");
     m_subtitleLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(m_subtitleLabel);
 
-    layout->addSpacing(16);
+    layout->addSpacing(20);
 
-    // 开始游戏按钮
+    // 开始游戏按钮 - 更大更显眼
     m_startBtn = new QPushButton("开始游戏", m_rightPanel);
-    m_startBtn->setFixedSize(300, 60);
-    Style::applyPrimaryButton(m_startBtn);
-    m_startBtn->setStyleSheet(Style::primaryButtonStyle());
+    m_startBtn->setFixedSize(320, 68);
+    m_startBtn->setCursor(Qt::PointingHandCursor);
+    m_startBtn->setStyleSheet(R"(
+        QPushButton {
+            font-size: 22px;
+            font-weight: bold;
+            color: white;
+            background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                stop:0 #FF6B6B, stop:0.3 #FF8E53, stop:0.6 #FFA500, stop:1 #FFD700);
+            border: none;
+            border-radius: 34px;
+        }
+        QPushButton:hover {
+            background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                stop:0 #FF8585, stop:0.3 #FFA873, stop:0.6 #FFB733, stop:1 #FFE066);
+        }
+        QPushButton:pressed {
+            background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                stop:0 #E05555, stop:0.3 #E67E4A, stop:0.6 #E69500, stop:1 #E6C200);
+        }
+    )");
 
-    // 按钮悬停动画效果
     auto* btnShadow = new QGraphicsDropShadowEffect(m_startBtn);
-    btnShadow->setBlurRadius(24);
-    btnShadow->setColor(QColor(231, 76, 60, 140));
-    btnShadow->setOffset(0, 6);
+    btnShadow->setBlurRadius(28);
+    btnShadow->setColor(QColor(255, 140, 50, 160));
+    btnShadow->setOffset(0, 8);
     m_startBtn->setGraphicsEffect(btnShadow);
 
     layout->addWidget(m_startBtn, 0, Qt::AlignCenter);
 
-    layout->addSpacing(20);
+    layout->addSpacing(24);
 
-    // 次要按钮网格 (2x2)
+    // 次要按钮网格 (2x2) - 纯文字去掉 emoji
     auto* btnGrid = new QGridLayout();
-    btnGrid->setSpacing(14);
+    btnGrid->setSpacing(12);
     btnGrid->setContentsMargins(0, 0, 0, 0);
 
-    m_settingsBtn = new QPushButton("⚙ 设置", m_rightPanel);
-    m_recordsBtn = new QPushButton("📋 记录", m_rightPanel);
-    m_rankBtn = new QPushButton("🏆 段位", m_rightPanel);
-    m_achievementBtn = new QPushButton("⭐ 成就", m_rightPanel);
+    struct BtnInfo { QString text; QPushButton** ptr; };
+    QList<BtnInfo> btns = {
+        {"设置", &m_settingsBtn},
+        {"游戏记录", &m_recordsBtn},
+        {"段位", &m_rankBtn},
+        {"成就", &m_achievementBtn},
+    };
 
-    m_settingsBtn->setFixedSize(140, 40);
-    m_recordsBtn->setFixedSize(140, 40);
-    m_rankBtn->setFixedSize(140, 40);
-    m_achievementBtn->setFixedSize(140, 40);
-
-    Style::applySecondaryButton(m_settingsBtn);
-    Style::applySecondaryButton(m_recordsBtn);
-    Style::applySecondaryButton(m_rankBtn);
-    Style::applySecondaryButton(m_achievementBtn);
-
-    btnGrid->addWidget(m_settingsBtn, 0, 0);
-    btnGrid->addWidget(m_recordsBtn, 0, 1);
-    btnGrid->addWidget(m_rankBtn, 1, 0);
-    btnGrid->addWidget(m_achievementBtn, 1, 1);
+    for (int i = 0; i < btns.size(); i++) {
+        auto* btn = new QPushButton(btns[i].text, m_rightPanel);
+        *btns[i].ptr = btn;
+        btn->setFixedSize(152, 44);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setStyleSheet(R"(
+            QPushButton {
+                font-size: 15px;
+                color: #b0b0c0;
+                background: rgba(255,255,255,0.05);
+                border: 1px solid rgba(255,255,255,0.10);
+                border-radius: 12px;
+            }
+            QPushButton:hover {
+                color: white;
+                background: rgba(255,255,255,0.10);
+                border-color: rgba(255,255,255,0.22);
+            }
+            QPushButton:pressed {
+                background: rgba(255,255,255,0.04);
+            }
+        )");
+        btnGrid->addWidget(btn, i / 2, i % 2);
+    }
 
     layout->addLayout(btnGrid);
     layout->addStretch();
 
-    // 连接信号
     connect(m_startBtn, &QPushButton::clicked, this, &MainMenu::showModeSelect);
     connect(m_settingsBtn, &QPushButton::clicked, this, &MainMenu::openSettings);
     connect(m_recordsBtn, &QPushButton::clicked, this, &MainMenu::showRecords);
@@ -233,20 +260,21 @@ void MainMenu::setupRightPanel() {
 
 void MainMenu::initStars() {
     m_stars.clear();
-    int count = 120;
+    int count = 150;
     for (int i = 0; i < count; i++) {
         Star s;
-        s.pos = {randFloat(0, 1), randFloat(0, 1)}; // 相对位置 0-1
-        s.size = randFloat(1.0f, 3.0f);
-        s.baseAlpha = randFloat(0.3f, 0.9f);
+        s.pos = {randFloat(0, 1), randFloat(0, 1)};
+        s.size = randFloat(0.8f, 2.8f);
+        s.baseAlpha = randFloat(0.2f, 0.9f);
         s.phase = randFloat(0, 3.14159f * 2);
-        s.speed = randFloat(0.5f, 2.0f);
+        s.speed = randFloat(0.3f, 2.5f);
 
-        // 80% 白色，10% 淡蓝，10% 淡黄
-        int colorType = randInt(0, 9);
-        if (colorType < 8) s.color = QColor(255, 255, 255);
-        else if (colorType < 9) s.color = QColor(136, 204, 255);
-        else s.color = QColor(255, 238, 170);
+        int colorType = randInt(0, 14);
+        if (colorType < 8)       s.color = QColor(255, 255, 255);
+        else if (colorType < 10) s.color = QColor(160, 200, 255);
+        else if (colorType < 12) s.color = QColor(255, 240, 180);
+        else if (colorType < 13) s.color = QColor(200, 160, 255);
+        else                     s.color = QColor(160, 255, 200);
 
         m_stars.append(s);
     }
@@ -254,114 +282,51 @@ void MainMenu::initStars() {
 
 void MainMenu::initBalls() {
     m_balls.clear();
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 50; i++) {
         MenuBall b;
-        b.pos = {randFloat(0, width()), randFloat(0, height())};
-        b.vel = {randFloat(-30, 30), randFloat(-30, 30)};
-        b.radius = randFloat(20, 80);
-        b.color = QColor::fromHsv(randInt(0, 359), 150 + randInt(0, 80), 180 + randInt(0, 75));
+        b.pos = {randFloat(0, 1), randFloat(0, 1)};
+        b.vel = {randFloat(-40, 40), randFloat(-40, 40)};
+        b.radius = randFloat(15, 90);
+        b.color = QColor::fromHsv(randInt(0, 359), 120 + randInt(0, 100), 170 + randInt(0, 85));
+        b.alpha = randFloat(0.03f, 0.12f);
         m_balls.append(b);
     }
 }
 
-void MainMenu::initMeteor() {
-    Meteor m;
-    float startX = randFloat(0.6f, 1.0f) * width();
-    float startY = randFloat(0.0f, 0.3f) * height();
-    float angle = randFloat(200, 240) * 3.14159f / 180.0f; // 200-240度方向
-    float distance = randFloat(300, 600);
-
-    m.start = QPointF(startX, startY);
-    m.end = QPointF(startX + cosf(angle) * distance, startY + sinf(angle) * distance);
-    m.current = m.start;
-    m.progress = 0.0f;
-    m.length = randFloat(50, 100);
-    m.duration = randFloat(0.5f, 1.0f);
-    m.active = true;
-
-    m_meteors.append(m);
-}
-
-void MainMenu::updateStars(float) {
-    // 星点闪烁由 paintEvent 根据 m_time 计算
-}
-
-void MainMenu::updateMeteors(float dt) {
-    for (auto& m : m_meteors) {
-        if (!m.active) continue;
-        m.progress += dt / m.duration;
-        if (m.progress >= 1.0f) {
-            m.active = false;
-        } else {
-            m.current = QPointF(
-                m.start.x() + (m.end.x() - m.start.x()) * m.progress,
-                m.start.y() + (m.end.y() - m.start.y()) * m.progress
-            );
-        }
-    }
-    // 清理已完成的流星
-    m_meteors.erase(std::remove_if(m_meteors.begin(), m_meteors.end(),
-        [](const Meteor& m) { return !m.active; }), m_meteors.end());
-}
-
 void MainMenu::updateBalls() {
+    float w = width(), h = height();
+    if (w <= 0 || h <= 0) return;
     for (auto& b : m_balls) {
         b.pos += b.vel * 0.016f;
-        if (b.pos.x() < -b.radius) b.pos.setX(width() + b.radius);
-        if (b.pos.x() > width() + b.radius) b.pos.setX(-b.radius);
-        if (b.pos.y() < -b.radius) b.pos.setY(height() + b.radius);
-        if (b.pos.y() > height() + b.radius) b.pos.setY(-b.radius);
+        if (b.pos.x() < -b.radius) b.pos.setX(w + b.radius);
+        if (b.pos.x() > w + b.radius) b.pos.setX(-b.radius);
+        if (b.pos.y() < -b.radius) b.pos.setY(h + b.radius);
+        if (b.pos.y() > h + b.radius) b.pos.setY(-b.radius);
     }
+}
+
+void MainMenu::drawBackground(QPainter& p) {
+    p.fillRect(rect(), Style::bgDark());
 }
 
 void MainMenu::drawStars(QPainter& p) {
+    float w = width(), h = height();
     for (const auto& s : m_stars) {
         float alpha = s.baseAlpha * (0.5f + 0.5f * sinf(m_time * s.speed + s.phase));
         QColor c = s.color;
         c.setAlphaF(alpha);
-
-        QPointF pos(s.pos.x() * width(), s.pos.y() * height());
+        QPointF pos(s.pos.x() * w, s.pos.y() * h);
 
         p.setPen(Qt::NoPen);
         p.setBrush(c);
         p.drawEllipse(pos, s.size, s.size);
 
-        // 大星点加光晕
-        if (s.size > 2.0f) {
-            c.setAlphaF(alpha * 0.3f);
+        // 较大星点加微弱光晕
+        if (s.size > 1.8f) {
+            c.setAlphaF(alpha * 0.25f);
             p.setBrush(c);
-            p.drawEllipse(pos, s.size * 2, s.size * 2);
+            p.drawEllipse(pos, s.size * 2.5f, s.size * 2.5f);
         }
-    }
-}
-
-void MainMenu::drawMeteors(QPainter& p) {
-    for (const auto& m : m_meteors) {
-        if (!m.active) continue;
-
-        // 计算拖尾方向
-        QPointF dir = m.end - m.start;
-        float len = sqrtf(dir.x()*dir.x() + dir.y()*dir.y());
-        if (len < 1) continue;
-        dir /= len;
-
-        // 拖尾渐变
-        float tailLen = m.length;
-        QPointF tailStart = m.current;
-        QPointF tailEnd = m.current - dir * tailLen;
-
-        QLinearGradient grad(tailEnd, tailStart);
-        grad.setColorAt(0, QColor(255, 255, 255, 0));
-        grad.setColorAt(0.7, QColor(255, 255, 255, 100));
-        grad.setColorAt(1, QColor(255, 255, 255, 200));
-
-        p.setPen(QPen(grad, 2));
-        p.drawLine(tailEnd, tailStart);
-
-        // 头部光点
-        p.setPen(Qt::NoPen);
-        p.setBrush(QColor(255, 255, 255, 230));
-        p.drawEllipse(m.current, 2, 2);
     }
 }
 
@@ -369,11 +334,11 @@ void MainMenu::drawTitle(QPainter& p) {
     if (!m_rightPanel) return;
 
     QRect rightRect = m_rightPanel->geometry();
-    QRect titleRect(rightRect.x(), rightRect.y() + 24, rightRect.width(), 70);
+    QRect titleRect(rightRect.x(), rightRect.y() + 30, rightRect.width(), 84);
 
     QList<QColor> colors;
-    colors << QColor("#4fc3f7") << QColor("#ba68c8") << QColor("#f48fb1");
-    Style::drawGradientTitle(p, "球球大作战", titleRect, colors, 44);
+    colors << QColor("#4fc3f7") << QColor("#ab47bc") << QColor("#f48fb1") << QColor("#ffcc80");
+    Style::drawGradientTitle(p, "球球大作战", titleRect, colors, 56);
 }
 
 void MainMenu::paintEvent(QPaintEvent*) {
@@ -381,35 +346,40 @@ void MainMenu::paintEvent(QPaintEvent*) {
     p.setRenderHint(QPainter::Antialiasing);
     p.setRenderHint(QPainter::TextAntialiasing);
 
-    // 深色背景
-    p.fillRect(rect(), Style::bgDark());
+    drawBackground(p);
 
-    // 绘制星点
-    drawStars(p);
-
-    // 绘制流星
-    drawMeteors(p);
-
-    // 绘制远景漂浮球（低透明度）
+    // 漂浮球 - 不同透明度的远景装饰
+    float w = width(), h = height();
     for (auto& b : m_balls) {
         QColor c = b.color;
-        c.setAlpha(12);
+        c.setAlphaF(b.alpha);
         p.setBrush(c);
         p.setPen(Qt::NoPen);
-        p.drawEllipse(b.pos, b.radius, b.radius);
+        p.drawEllipse(QPointF(b.pos.x() * w, b.pos.y() * h), b.radius, b.radius);
     }
 
-    // 绘制渐变描边标题
+    // 星点
+    drawStars(p);
+
+    // 暗角
+    Style::drawVignette(p, rect(), 0.55f);
+
+    // 标题
     drawTitle(p);
 }
 
 void MainMenu::resizeEvent(QResizeEvent*) {
-    initStars(); // 重新分布星点
-    initBalls();
+    float w = width(), h = height();
+    initStars();
 
-    // 更新左右面板位置，整体居中
+    // 重新初始化球的位置到屏幕坐标系
+    for (auto& b : m_balls) {
+        b.pos = {randFloat(0, 1), randFloat(0, 1)};
+    }
+
+    // 左右面板居中定位
     if (m_leftPanel && m_rightPanel) {
-        int panelGap = 40;
+        int panelGap = 50;
         int totalWidth = m_leftPanel->width() + panelGap + m_rightPanel->width();
         int startX = (width() - totalWidth) / 2;
         int leftY = (height() - m_leftPanel->height()) / 2;
@@ -427,10 +397,8 @@ void MainMenu::refreshRank() {
     q.addBindValue("local");
 
     int elo = 1000;
-    QString tierName = "青铜 III";
     if (q.exec() && q.next()) {
         elo = q.value("elo").toInt();
-        tierName = q.value("rank_tier").toString();
     }
 
     TierInfo info = RankSystem::tierInfoForElo(elo);
@@ -439,7 +407,7 @@ void MainMenu::refreshRank() {
 
     if (m_tierLabel) {
         m_tierLabel->setText(info.name);
-        m_tierLabel->setStyleSheet(Style::labelStyle(info.color, 24, true));
+        m_tierLabel->setStyleSheet(Style::labelStyle(info.color, 26, true));
     }
 
     if (m_eloLabel) {
@@ -448,14 +416,13 @@ void MainMenu::refreshRank() {
 
     if (m_eloProgress) {
         m_eloProgress->setValue(static_cast<int>(progress * 1000));
-
-        // 更新进度条颜色
-        QString nextColor = (currentTier == RankTier::King_I) ? info.color.name() :
-            RankSystem::tierInfo(static_cast<RankTier>(static_cast<int>(currentTier) + 1)).color.name();
-        m_eloProgress->setStyleSheet(QString(R"(
-            QProgressBar { background: rgba(255,255,255,0.1); border-radius: 6px; border: none; }
-            QProgressBar::chunk { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 %1,stop:1 %2); border-radius: 6px; }
-        )").arg(info.color.name()).arg(nextColor));
+        QString nextColor = (currentTier == RankTier::King_I)
+            ? info.color.name()
+            : RankSystem::tierInfo(static_cast<RankTier>(static_cast<int>(currentTier) + 1)).color.name();
+        m_eloProgress->setStyleSheet(QString(
+            "QProgressBar { background: rgba(255,255,255,0.08); border: none; border-radius: 7px; }"
+            "QProgressBar::chunk { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 %1,stop:1 %2); border-radius: 7px; }"
+        ).arg(info.color.name()).arg(nextColor));
     }
 
     if (m_progressText) {
