@@ -208,5 +208,35 @@ if(BUILD_TESTS)
         Qt6::Gui
         Qt6::Widgets
     )
+
+    qt_add_executable(TestPhysicsCollision
+        tests/TestPhysicsCollision.cpp
+        src/entity/Player.cpp
+        src/entity/Spore.cpp
+        src/entity/BigBean.cpp
+        src/physics/PhysicsEngine.cpp
+        src/util/Config.cpp
+    )
+    target_include_directories(TestPhysicsCollision PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(TestPhysicsCollision PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+    )
+
+    qt_add_executable(TestPlayerMerge
+        tests/TestPlayerMerge.cpp
+        src/entity/Player.cpp
+        src/entity/Spore.cpp
+        src/entity/BigBean.cpp
+        src/physics/PhysicsEngine.cpp
+        src/util/Config.cpp
+    )
+    target_include_directories(TestPlayerMerge PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(TestPlayerMerge PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+    )
 endif()
 

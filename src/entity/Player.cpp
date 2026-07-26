@@ -167,13 +167,22 @@ void Player::update(float dt) {
             float r2 = cells[j].radius();
             float minDist = r1 + r2;
 
-            if (dist < 0.001f) continue;
+            // 零距离 / 完全重叠时直接合并（跳过冷却检查）
+            if (dist < 0.001f) {
+                if (!cells[i].isMerging && !cells[j].isMerging) {
+                    float totalMass = cells[i].mass + cells[j].mass;
+                    cells[i].mass = totalMass;
+                    if (cells[i].mass > cfg.maxMassPerCell) cells[i].mass = cfg.maxMassPerCell;
+                    cells[j].alive = false;
+                }
+                continue;
+            }
 
             // 冷却期内：弹性推开，避免穿插和瞬时融合
             if ((cells[i].isMerging || cells[j].isMerging) && dist < minDist) {
                 float overlap = minDist - dist;
                 Vec2 normal = diff / dist;
-                float pushFactor = 0.3f; // 推开强度
+                float pushFactor = 0.3f;
                 cells[i].pos += normal * overlap * pushFactor * 0.5f;
                 cells[j].pos -= normal * overlap * pushFactor * 0.5f;
                 continue;
@@ -226,7 +235,15 @@ void Player::update(float dt) {
         float dist = (virtualCursor - c.pos).length();
         float deadZone = c.radius() * 0.5f;
         // 应用模式速度倍率
-        float maxSpeed = (cfg.baseSpeed * speedMul) / qSqrt(c.mass);
+        // 速度软化：mass > 400 后不再按 sqrt 减速，改用开立方曲线 + 保底下限
+        float effectiveMass = qMin(c.mass, 400.0f);
+        float maxSpeed = (cfg.baseSpeed * speedMul) / qSqrt(effectiveMass);
+        // 大质量保底最低速度（mass > 1000 时不会完全动不了）
+        float minSpeed = 25.0f * speedMul;
+        if (c.mass > 400.0f) {
+            float largeSpeed = (cfg.baseSpeed * speedMul) / qPow(c.mass, 1.0f/3.0f);
+            maxSpeed = qMax(largeSpeed, minSpeed);
+        }
 
         if (dist < deadZone) {
             c.vel = Vec2{0, 0};

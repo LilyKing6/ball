@@ -107,7 +107,29 @@ void World::init(GameMode mode) {
 
     Spawner::spawnFood(m_foods, m_modeCfg.foodCount, m_width, m_height);
 
-    for (int i = 0; i < m_modeCfg.virusCount; i++) {
+    // Virus spawning: ~12 in 3-4 clusters + rest scattered
+    int virusTotal = m_modeCfg.virusCount;
+    int clusterCount = 3 + randInt(0, 1);  // 3 or 4 clusters
+    int clusteredCount = 12;
+    int scatteredCount = virusTotal - clusteredCount;
+
+    for (int ci = 0; ci < clusterCount; ci++) {
+        float cx = randFloat(500, m_width - 500);
+        float cy = randFloat(500, m_height - 500);
+        int perCluster = clusteredCount / clusterCount;
+        if (ci == 0) perCluster += clusteredCount % clusterCount;
+        for (int vi = 0; vi < perCluster; vi++) {
+            float ox = randFloat(-120, 120);
+            float oy = randFloat(-120, 120);
+            Vec2 cpos(cx + ox, cy + oy);
+            cpos.x = clamp(cpos.x, 200.0f, m_width - 200.0f);
+            cpos.y = clamp(cpos.y, 200.0f, m_height - 200.0f);
+            Virus v(cpos);
+            m_viruses.append(v);
+        }
+    }
+
+    for (int i = 0; i < scatteredCount; i++) {
         Virus v({randFloat(200, m_width - 200), randFloat(200, m_height - 200)});
         m_viruses.append(v);
     }
