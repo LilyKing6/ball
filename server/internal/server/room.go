@@ -290,6 +290,7 @@ func (r *Room) Run() {
 }
 
 // broadcast 把当前 World 状态广播给所有客户端
+// M5 视野裁剪：为每个客户端按其玩家质心和视野半径构建裁剪快照
 func (r *Room) broadcast() {
 	r.mu.RLock()
 	if len(r.clients) == 0 {
@@ -303,27 +304,42 @@ func (r *Room) broadcast() {
 			clients = append(clients, c)
 		}
 	}
-	r.mu.RUnlock()
-
-	// 构造 snapshot
-	r.mu.RLock()
-	snap := r.world.BuildSnapshot(r.tickID)
 	tickID := r.tickID
 	r.mu.RUnlock()
-	snapBytes, _ := json.Marshal(snap)
 
-	wrapped := proto.SnapshotMsg{
-		TickID:   tickID,
-		Snapshot: snapBytes,
+	if len(clients) == 0 {
+		return
 	}
-	payload, _ := json.Marshal(wrapped)
 
-	env := proto.Envelope{Type: "snapshot", Payload: payload}
-	data, _ := json.Marshal(env)
-
+	// 为每个客户端构建裁剪快照并发送
 	for _, c := range clients {
+		r.mu.RLock()
+		cx, cy, radius := r.viewParams(c.playerID)
+		snap := r.world.BuildSnapshotCulled(tickID, cx, cy, radius)
+		r.mu.RUnlock()
+
+		snapBytes, _ := json.Marshal(snap)
+		wrapped := proto.SnapshotMsg{
+			TickID:   tickID,
+			Snapshot: snapBytes,
+		}
+		payload, _ := json.Marshal(wrapped)
+		env := proto.Envelope{Type: "snapshot", Payload: payload}
+		data, _ := json.Marshal(env)
 		c.SendRaw(data)
 	}
+}
+
+// viewParams 返回指定玩家的视野中心和半径
+// 玩家不存在或死亡时返回世界中心和默认半径
+func (r *Room) viewParams(playerID int) (cx, cy, radius float64) {
+	radius = world.Cfg.ViewCullRadius
+	p, ok := r.world.Players[playerID]
+	if !ok || p.Dead {
+		return r.world.Width / 2, r.world.Height / 2, radius
+	}
+	com := p.CenterOfMass()
+	return com.X, com.Y, radius
 }
 
 // Info 获取房间列表信息（线程安全）

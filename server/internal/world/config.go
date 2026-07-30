@@ -46,6 +46,9 @@ var Cfg = struct {
 
 	// Game
 	RespawnDelay float64
+
+	// View culling
+	ViewCullRadius float64 // 视野裁剪半径（世界坐标），<=0 表示不裁剪
 }{
 	WorldWidth:         3000,
 	WorldHeight:        3000,
@@ -91,4 +94,7 @@ var Cfg = struct {
 
 	// Game
 	RespawnDelay: 3.0,
+
+	// View culling
+	ViewCullRadius: 1500.0,
 }

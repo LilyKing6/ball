@@ -158,3 +158,125 @@ func (w *World) BuildSnapshot(tickID int) *Snapshot {
 
 // unused import guard
 var _ = math.Sqrt
+
+// BuildSnapshotCulled 构造以 (centerX, centerY) 为中心、radius 为半径的裁剪快照
+// radius <= 0 时退化为全量快照（等同 BuildSnapshot）
+func (w *World) BuildSnapshotCulled(tickID int, centerX, centerY, radius float64) *Snapshot {
+	if radius <= 0 {
+		return w.BuildSnapshot(tickID)
+	}
+
+	radiusSq := radius * radius
+	inRange := func(x, y float64) bool {
+		dx := x - centerX
+		dy := y - centerY
+		return dx*dx+dy*dy <= radiusSq
+	}
+
+	s := &Snapshot{
+		TickID:           tickID,
+		GameTime:         w.GameTime,
+		WorldWidth:       w.Width,
+		WorldHeight:      w.Height,
+		GameMode:         0,
+		TimeToNextShrink: -1,
+		Players:          make([]PlayerObs, 0),
+		Foods:            make([]FoodObs, 0),
+		Viruses:          make([]VirusObs, 0),
+		Spores:           make([]SporeObs, 0),
+		BigBeans:         make([]BigBeanObs, 0),
+	}
+
+	// 玩家：任何 cell 在视野内则包含整个玩家
+	for _, p := range w.Players {
+		if p.Dead && len(p.Cells) == 0 {
+			continue
+		}
+		po := PlayerObs{
+			ID:     p.ID,
+			Name:   p.Name,
+			Team:   p.Team,
+			Shield: p.Shield,
+			Cells:  make([]CellObs, 0, len(p.Cells)),
+		}
+		anyInRange := false
+		for i := range p.Cells {
+			if !p.Cells[i].Alive {
+				continue
+			}
+			if !inRange(p.Cells[i].Pos.X, p.Cells[i].Pos.Y) {
+				continue
+			}
+			anyInRange = true
+			po.Cells = append(po.Cells, CellObs{
+				X:    p.Cells[i].Pos.X,
+				Y:    p.Cells[i].Pos.Y,
+				Mass: p.Cells[i].Mass,
+			})
+		}
+		if anyInRange {
+			s.Players = append(s.Players, po)
+		}
+	}
+
+	// 食物
+	for i := range w.Foods {
+		if !w.Foods[i].Alive {
+			continue
+		}
+		if !inRange(w.Foods[i].Pos.X, w.Foods[i].Pos.Y) {
+			continue
+		}
+		s.Foods = append(s.Foods, FoodObs{
+			X: w.Foods[i].Pos.X,
+			Y: w.Foods[i].Pos.Y,
+		})
+	}
+
+	// 病毒
+	for i := range w.Viruses {
+		if !w.Viruses[i].Alive {
+			continue
+		}
+		if !inRange(w.Viruses[i].Pos.X, w.Viruses[i].Pos.Y) {
+			continue
+		}
+		s.Viruses = append(s.Viruses, VirusObs{
+			X: w.Viruses[i].Pos.X,
+			Y: w.Viruses[i].Pos.Y,
+		})
+	}
+
+	// 孢子
+	for i := range w.Spores {
+		if !w.Spores[i].Alive {
+			continue
+		}
+		if !inRange(w.Spores[i].Pos.X, w.Spores[i].Pos.Y) {
+			continue
+		}
+		s.Spores = append(s.Spores, SporeObs{
+			X:      w.Spores[i].Pos.X,
+			Y:      w.Spores[i].Pos.Y,
+			Mass:   w.Spores[i].Mass,
+			Radius: w.Spores[i].Radius(),
+		})
+	}
+
+	// 大豆
+	for i := range w.BigBeans {
+		if !w.BigBeans[i].Alive {
+			continue
+		}
+		if !inRange(w.BigBeans[i].Pos.X, w.BigBeans[i].Pos.Y) {
+			continue
+		}
+		s.BigBeans = append(s.BigBeans, BigBeanObs{
+			X:    w.BigBeans[i].Pos.X,
+			Y:    w.BigBeans[i].Pos.Y,
+			Mass: w.BigBeans[i].Mass,
+		})
+	}
+
+	return s
+}

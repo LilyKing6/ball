@@ -203,3 +203,83 @@ func TestBuildSnapshotSerializesOnlyLiveEntities(t *testing.T) {
 		t.Errorf("snapshot has %d big beans, want 1", len(snapshot.BigBeans))
 	}
 }
+
+func TestBuildSnapshotCulledFiltersEntities(t *testing.T) {
+	w := newTestWorld()
+	w.Width = 1000
+	w.Height = 1000
+
+	// 玩家在 100,100（视野内）和 900,900（视野外）
+	w.Players[1] = &Player{
+		ID:     1,
+		Name:   "nearby",
+		Cells:  []Cell{testCell(Vec2{X: 100, Y: 100}, 30)},
+		Cursor: Vec2{X: 100, Y: 100},
+	}
+	w.Players[2] = &Player{
+		ID:     2,
+		Name:   "faraway",
+		Cells:  []Cell{testCell(Vec2{X: 900, Y: 900}, 30)},
+		Cursor: Vec2{X: 900, Y: 900},
+	}
+
+	// 食物
+	w.Foods = []Food{
+		{Pos: Vec2{X: 110, Y: 110}, Mass: Cfg.FoodMass, Alive: true},
+		{Pos: Vec2{X: 800, Y: 800}, Mass: Cfg.FoodMass, Alive: true},
+	}
+
+	// 病毒
+	w.Viruses = []Virus{
+		{Pos: Vec2{X: 120, Y: 120}, Mass: Cfg.VirusMass, Alive: true},
+		{Pos: Vec2{X: 850, Y: 850}, Mass: Cfg.VirusMass, Alive: true},
+	}
+
+	// 大豆
+	w.BigBeans = []BigBean{
+		{Pos: Vec2{X: 130, Y: 130}, Mass: 100, Alive: true},
+		{Pos: Vec2{X: 880, Y: 880}, Mass: 200, Alive: true},
+	}
+
+	// 以 (100,100) 为中心，半径 200 裁剪
+	snap := w.BuildSnapshotCulled(5, 100, 100, 200)
+
+	if len(snap.Players) != 1 {
+		t.Fatalf("culled snapshot has %d players, want 1 (only nearby)", len(snap.Players))
+	}
+	if snap.Players[0].ID != 1 {
+		t.Errorf("culled player ID = %d, want 1", snap.Players[0].ID)
+	}
+	if len(snap.Foods) != 1 {
+		t.Errorf("culled snapshot has %d foods, want 1", len(snap.Foods))
+	}
+	if len(snap.Viruses) != 1 {
+		t.Errorf("culled snapshot has %d viruses, want 1", len(snap.Viruses))
+	}
+	if len(snap.BigBeans) != 1 {
+		t.Errorf("culled snapshot has %d big beans, want 1", len(snap.BigBeans))
+	}
+}
+
+func TestBuildSnapshotCulledZeroRadiusReturnsFullSnapshot(t *testing.T) {
+	w := newTestWorld()
+	w.Players[1] = &Player{
+		ID:     1,
+		Name:   "p1",
+		Cells:  []Cell{testCell(Vec2{X: 500, Y: 500}, 30)},
+	}
+	w.Foods = []Food{
+		{Pos: Vec2{X: 100, Y: 100}, Mass: Cfg.FoodMass, Alive: true},
+		{Pos: Vec2{X: 900, Y: 900}, Mass: Cfg.FoodMass, Alive: true},
+	}
+
+	// radius=0 应退化为全量快照
+	snap := w.BuildSnapshotCulled(1, 500, 500, 0)
+
+	if len(snap.Foods) != 2 {
+		t.Errorf("full snapshot has %d foods, want 2", len(snap.Foods))
+	}
+	if len(snap.Players) != 1 {
+		t.Errorf("full snapshot has %d players, want 1", len(snap.Players))
+	}
+}
