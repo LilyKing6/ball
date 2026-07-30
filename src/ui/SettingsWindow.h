@@ -2,9 +2,12 @@
 #define SETTINGSWINDOW_H
 
 #include "SubWindow.h"
+#include "input/KeyBinding.h"
 #include <QSlider>
 #include <QLabel>
 #include <QComboBox>
+#include <QPushButton>
+#include <QMap>
 
 class SettingsWindow : public SubWindow {
     Q_OBJECT
@@ -25,6 +28,18 @@ private:
     QLabel* m_bgmVolumeValue;
     QComboBox* m_resolutionCombo;
     QComboBox* m_displayModeCombo;
+
+    // 键位绑定编辑
+    QMap<GameAction, QPushButton*> m_keyButtons;
+    GameAction m_capturingAction = GameAction::Split;
+    bool m_capturingKey = false;
+
+    void startCaptureKey(GameAction action, QPushButton* btn);
+    void updateKeyLabels();
+    void applyKeyBindings();
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 };
 
 #endif // SETTINGSWINDOW_H

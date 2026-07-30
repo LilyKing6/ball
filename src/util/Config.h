@@ -2,6 +2,7 @@
 #define CONFIG_H
 
 #include <QtCore>
+#include "input/KeyBinding.h"
 
 struct Config {
     static Config& instance() { static Config c; return c; }
@@ -126,6 +127,9 @@ struct Config {
     QString serverHost = "127.0.0.1";
     int serverPort = 8765;
     QString playerName = "Player";
+
+    // Key bindings
+    KeyBinding keyBindings;
 
     void load(const QString& path);
     void save(const QString& path) const;

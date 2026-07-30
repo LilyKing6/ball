@@ -5,6 +5,7 @@
 #include "engine/WorldSnapshot.h"
 #include "network/NetworkClient.h"
 #include "util/Config.h"
+#include "input/InputManager.h"
 #include "particle/ParticleSystem.h"
 #include "util/Random.h"
 #include <QMouseEvent>
@@ -353,18 +354,23 @@ void GLWidget::mouseReleaseEvent(QMouseEvent* e) {
 
 void GLWidget::keyPressEvent(QKeyEvent* e) {
     auto& cfg = Config::instance();
+    auto& im = InputManager::instance();
 
-    if (e->key() == Qt::Key_Space && !e->isAutoRepeat() && m_engine) {
-        m_engine->splitLocalPlayer();
-    } else if (e->key() == Qt::Key_E && m_engine) {
-        m_engine->ejectFromLocalPlayer();
-    } else if (e->key() == Qt::Key_F3) {
+    // 先让 InputManager 处理分裂/吐球等游戏操作
+    if (m_engine && im.handleKeyPress(e, m_engine)) {
+        QOpenGLWidget::keyPressEvent(e);
+        return;
+    }
+
+    // UI 级按键：调试面板、控制模式切换
+    if (e->key() == cfg.keyBindings.key(GameAction::ToggleDebug)) {
         emit toggleDebugPanel();
-    } else if (cfg.controlMode == 2 && e->key() == cfg.controlSwitchKey && !e->isAutoRepeat()) {
+    } else if (cfg.controlMode == 2 && e->key() == cfg.keyBindings.key(GameAction::ToggleControlMode) && !e->isAutoRepeat()) {
         // Hybrid 模式：切换游标/摇杆
         m_cursorModeActive = !m_cursorModeActive;
         if (m_cursorModeActive && m_joystick) m_joystick->hide();
     }
+
     QOpenGLWidget::keyPressEvent(e);
 }
 

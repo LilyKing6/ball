@@ -4,6 +4,7 @@
 #include "util/Math.h"
 #include "util/Config.h"
 #include "util/Random.h"
+#include "input/InputManager.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QTimer>
@@ -364,20 +365,28 @@ void QPainterGLWidget::mouseMoveEvent(QMouseEvent* e) {
 }
 
 void QPainterGLWidget::keyPressEvent(QKeyEvent* e) {
-    if (e->key() == Qt::Key_Space && !e->isAutoRepeat() && m_engine) m_engine->splitLocalPlayer();
-    else if (e->key() == Qt::Key_E) {
-        m_eKeyDown = true;
-        // Eject trail particle
-        if (m_engine && m_engine->world().localPlayer()) {
-            Vec2 com = m_engine->world().localPlayer()->centerOfMass();
-            QPointF sp = worldToScreen(com.x, com.y);
-            m_particles.emitTrail(sp, QColor(255, 180, 50));
+    auto& im = InputManager::instance();
+    if (m_engine && im.handleKeyPress(e, m_engine)) {
+        // 分裂/吐球已由 InputManager 处理
+        if (e->key() == im.binding().key(GameAction::Eject)) {
+            m_eKeyDown = true;
+            // Eject trail particle
+            if (m_engine && m_engine->world().localPlayer()) {
+                Vec2 com = m_engine->world().localPlayer()->centerOfMass();
+                QPointF sp = worldToScreen(com.x, com.y);
+                m_particles.emitTrail(sp, QColor(255, 180, 50));
+            }
         }
+        QWidget::keyPressEvent(e);
+        return;
     }
     QWidget::keyPressEvent(e);
 }
 
 void QPainterGLWidget::keyReleaseEvent(QKeyEvent* e) {
-    if (e->key() == Qt::Key_E) m_eKeyDown = false;
+    auto& im = InputManager::instance();
+    if (e->key() == im.binding().key(GameAction::Eject)) {
+        m_eKeyDown = false;
+    }
     QWidget::keyReleaseEvent(e);
 }

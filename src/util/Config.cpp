@@ -138,6 +138,14 @@ void Config::load(const QString& path) {
         QString s = o.value("playerName").toString();
         if (!s.isEmpty()) playerName = s;
     }
+
+    // Key bindings
+    {
+        QJsonObject kbObj = o.value("keyBindings").toObject();
+        if (!kbObj.isEmpty()) {
+            keyBindings = KeyBinding::fromJson(kbObj);
+        }
+    }
 }
 
 void Config::save(const QString& path) const {
@@ -263,6 +271,9 @@ void Config::save(const QString& path) const {
     CFG_SAVE(serverPort);
     o["playerName"] = playerName;
     // networkMode 故意不持久化为 true，避免 launch 时无服务端
+
+    // Key bindings
+    o["keyBindings"] = keyBindings.toJson();
 
     QFile f(path);
     if (f.open(QIODevice::WriteOnly))

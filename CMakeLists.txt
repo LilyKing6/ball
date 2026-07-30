@@ -35,6 +35,9 @@ set(SOURCES
 
     src/audio/AudioManager.cpp
 
+    src/input/KeyBinding.cpp
+    src/input/InputManager.cpp
+
     src/storage/DatabaseManager.cpp
 
     src/record/RecordManager.cpp
@@ -108,6 +111,9 @@ set(HEADERS
 
     src/ai/Behaviors.h
     src/ai/AIController.h
+
+    src/input/KeyBinding.h
+    src/input/InputManager.h
 
     src/audio/AudioManager.h
 

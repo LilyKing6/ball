@@ -3,12 +3,14 @@
 #include "HUDSettingsPanel.h"
 #include "ui/LeaderboardWidget.h"
 #include "util/Config.h"
+#include "input/InputManager.h"
 #include <QPainter>
 #include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QMouseEvent>
 #include <QApplication>
+#include <QKeyEvent>
 
 HUDOverlay::HUDOverlay(QWidget* parent) : QWidget(parent) {
     // HUDOverlay 是控制器，本身不显示任何内容
@@ -290,14 +292,14 @@ void HUDOverlay::createSkillButtons() {
 
     // 分裂按钮
     m_splitBtn = new QPushButton(m_skillPanel);
-    m_splitBtn->setText("分裂\nSpace");
+    m_splitBtn->setText("分裂\n" + InputManager::instance().binding().keyName(GameAction::Split));
     m_splitBtn->setCursor(Qt::PointingHandCursor);
     applySkillStyle(m_splitBtn, btnSize, Style::accentRed());
     layout->addWidget(m_splitBtn);
 
     // 吐球按钮
     m_ejectBtn = new QPushButton(m_skillPanel);
-    m_ejectBtn->setText("吐球\nE");
+    m_ejectBtn->setText("吐球\n" + InputManager::instance().binding().keyName(GameAction::Eject));
     m_ejectBtn->setCursor(Qt::PointingHandCursor);
     applySkillStyle(m_ejectBtn, btnSize, Style::accentBlue());
     layout->addWidget(m_ejectBtn);
@@ -305,13 +307,15 @@ void HUDOverlay::createSkillButtons() {
     // 转发点击给键盘事件 - 通过 GLWidget 触发
     connect(m_splitBtn, &QPushButton::clicked, this, [this]() {
         if (m_gameWidget) {
-            QKeyEvent press(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
+            int splitKey = InputManager::instance().binding().key(GameAction::Split);
+            QKeyEvent press(QEvent::KeyPress, splitKey, Qt::NoModifier);
             QApplication::sendEvent(m_gameWidget, &press);
         }
     });
     connect(m_ejectBtn, &QPushButton::clicked, this, [this]() {
         if (m_gameWidget) {
-            QKeyEvent press(QEvent::KeyPress, Qt::Key_E, Qt::NoModifier);
+            int ejectKey = InputManager::instance().binding().key(GameAction::Eject);
+            QKeyEvent press(QEvent::KeyPress, ejectKey, Qt::NoModifier);
             QApplication::sendEvent(m_gameWidget, &press);
         }
     });

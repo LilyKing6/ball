@@ -2,12 +2,14 @@
 #include "Style.h"
 #include "audio/AudioManager.h"
 #include "util/Config.h"
+#include "input/InputManager.h"
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QFrame>
 #include <QScrollArea>
 #include <QWidget>
+#include <QKeyEvent>
 
 // 预设分辨率定义
 struct ResolutionPreset {
@@ -198,20 +200,37 @@ SettingsWindow::SettingsWindow(QWidget* parent)
 
     // ========== 操作键位 ==========
     auto* keyContent = new QVBoxLayout();
-    keyContent->setSpacing(8);
+    keyContent->setSpacing(10);
     keyContent->setContentsMargins(0, 0, 0, 0);
 
-    QStringList keys = {
-        "🖱 移动：鼠标跟随 + WASD",
-        "⚔ 分裂：Space",
-        "💨 吐球：E",
-        "⏸ 暂停：Esc"
+    auto addKeyRow = [&](GameAction action, const QString& label) {
+        auto* row = new QHBoxLayout();
+        row->setSpacing(10);
+
+        auto* lbl = new QLabel(label, this);
+        lbl->setStyleSheet("font-size: 13px; color: #ccc; background: transparent;");
+        lbl->setFixedWidth(80);
+        row->addWidget(lbl);
+
+        auto* btn = new QPushButton(this);
+        btn->setStyleSheet(Style::iconButtonStyle());
+        btn->setFixedWidth(100);
+        row->addWidget(btn);
+        m_keyButtons[action] = btn;
+
+        connect(btn, &QPushButton::clicked, this, [this, action, btn]() {
+            startCaptureKey(action, btn);
+        });
+
+        keyContent->addLayout(row);
     };
-    for (auto& k : keys) {
-        auto* kl = new QLabel(k, this);
-        kl->setStyleSheet("color: #999; font-size: 13px; background: transparent;");
-        keyContent->addWidget(kl);
-    }
+
+    addKeyRow(GameAction::Split, "⚔ 分裂");
+    addKeyRow(GameAction::Eject, "💨 吐球");
+    addKeyRow(GameAction::ToggleDebug, "🔍 调试");
+    addKeyRow(GameAction::ToggleControlMode, "🔄 切换模式");
+
+    updateKeyLabels();
 
     contentLayout->addWidget(makeSectionCard(this, "⌨ 操作键位", keyContent));
 
@@ -219,4 +238,52 @@ SettingsWindow::SettingsWindow(QWidget* parent)
 
     scroll->setWidget(contentWidget);
     l->addWidget(scroll);
+
+    // 安装事件过滤器以捕获按键绑定输入
+    this->installEventFilter(this);
+}
+
+void SettingsWindow::startCaptureKey(GameAction action, QPushButton* btn) {
+    m_capturingAction = action;
+    m_capturingKey = true;
+    btn->setText("按任意键...");
+    btn->setStyleSheet(Style::iconButtonStyle());
+    this->setFocus();
+    this->grabKeyboard();
+}
+
+void SettingsWindow::updateKeyLabels() {
+    auto& kb = Config::instance().keyBindings;
+    for (auto it = m_keyButtons.begin(); it != m_keyButtons.end(); ++it) {
+        it.value()->setText(kb.keyName(it.key()));
+        it.value()->setStyleSheet(Style::iconButtonStyle());
+    }
+}
+
+void SettingsWindow::applyKeyBindings() {
+    auto& cfg = Config::instance();
+    InputManager::instance().setBinding(cfg.keyBindings);
+}
+
+bool SettingsWindow::eventFilter(QObject* watched, QEvent* event) {
+    if (m_capturingKey && event->type() == QEvent::KeyPress) {
+        auto* ke = dynamic_cast<QKeyEvent*>(event);
+        if (!ke) return SubWindow::eventFilter(watched, event);
+        int k = ke->key();
+        if (k == Qt::Key_Escape || k == Qt::Key_Backspace) {
+            // 取消捕获
+            m_capturingKey = false;
+            this->releaseKeyboard();
+            updateKeyLabels();
+            return true;
+        }
+        // 设置新键位
+        Config::instance().keyBindings.setKey(m_capturingAction, k);
+        m_capturingKey = false;
+        this->releaseKeyboard();
+        updateKeyLabels();
+        applyKeyBindings();
+        return true;
+    }
+    return SubWindow::eventFilter(watched, event);
 }
