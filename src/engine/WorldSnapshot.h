@@ -80,12 +80,14 @@ struct FoodObservation {
 struct VirusObservation {
     float x = 0;
     float y = 0;
+    int type = 0;
 
-    QJsonObject toJson() const { return QJsonObject{{"x", x}, {"y", y}}; }
+    QJsonObject toJson() const { return QJsonObject{{"x", x}, {"y", y}, {"type", type}}; }
     static VirusObservation fromJson(const QJsonObject& o) {
         VirusObservation v;
         v.x = static_cast<float>(o.value("x").toDouble());
         v.y = static_cast<float>(o.value("y").toDouble());
+        v.type = o.value("type").toInt(0);
         return v;
     }
 };

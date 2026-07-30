@@ -231,6 +231,14 @@ void Player::update(float dt) {
             }
         }
 
+        // 中毒：每帧损失质量
+        if (c.poisonTimer > 0.0f) {
+            c.poisonTimer -= dt;
+            if (c.poisonTimer < 0.0f) c.poisonTimer = 0.0f;
+            c.mass -= 8.0f * dt * 60.0f;
+            if (c.mass < 5.0f) c.mass = 5.0f;
+        }
+
         // 使用虚拟游标驱动移动
         float dist = (virtualCursor - c.pos).length();
         float deadZone = c.radius() * 0.5f;

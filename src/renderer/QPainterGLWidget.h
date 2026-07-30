@@ -52,7 +52,7 @@ private:
     bool m_showMinimap = true;
 
     QPointF worldToScreen(float wx, float wy) const;
-    void drawBall(QPainter& p, const QPointF& center, float radius, const QColor& color, const QString& name);
+    void drawBall(QPainter& p, const QPointF& center, float radius, const QColor& color, const QString& name, float poisonFactor = 0.0f);
 };
 
 #endif // QPAINTERGLWIDGET_H

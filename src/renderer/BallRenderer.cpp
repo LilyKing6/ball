@@ -52,6 +52,10 @@ void BallRenderer::setupQuad() {
     glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, sizeof(BallInstance), (void*)offsetof(BallInstance, alpha));
     glVertexAttribDivisor(4, 1);
 
+    glEnableVertexAttribArray(5);
+    glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, sizeof(BallInstance), (void*)offsetof(BallInstance, poisonFactor));
+    glVertexAttribDivisor(5, 1);
+
     glBindVertexArray(0);
 }
 
@@ -70,6 +74,7 @@ bool BallRenderer::initialize() {
     }
     m_uProj = m_prog->uniformLocation("uProjection");
     m_uView = m_prog->uniformLocation("uView");
+    m_uTime = m_prog->uniformLocation("uTime");
 
     setupQuad();
     return true;
@@ -93,6 +98,7 @@ void BallRenderer::render(const QVector<Player>& players, const Camera& camera) 
             bi.colorR = c.color.redF();
             bi.colorG = c.color.greenF();
             bi.colorB = c.color.blueF();
+            bi.poisonFactor = (c.poisonTimer > 0) ? qMin(c.poisonTimer / 5.0f, 1.0f) : 0.0f;
             if (isFirst) {
                 bi.alpha = 1.0f;
                 isFirst = false;
@@ -110,6 +116,8 @@ void BallRenderer::render(const QVector<Player>& players, const Camera& camera) 
     m_prog->bind();
     m_prog->setUniformValue(m_uProj, camera.projection());
     m_prog->setUniformValue(m_uView, camera.view());
+    m_time += 1.0f / 60.0f;
+    m_prog->setUniformValue(m_uTime, m_time);
 
     glBindVertexArray(m_vao);
     glBindBuffer(GL_ARRAY_BUFFER, m_instanceVbo);

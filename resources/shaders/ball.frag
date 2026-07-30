@@ -3,6 +3,7 @@ in vec4 vColor;
 in vec2 vLocalPos;
 in float vAlpha;
 in float vRadius;
+in float vPoison;
 
 out vec4 fragColor;
 
@@ -28,5 +29,16 @@ void main() {
     vec3 outlineCol = vColor.rgb * 0.4;
     vec3 finalCol = mix(gradient, outlineCol, outline);
 
-    fragColor = vec4(finalCol, edge * vAlpha);
+    // 中毒：紫色 mix + 半透明
+    if (vPoison > 0.0) {
+        vec3 poisonColor = vec3(0.6, 0.0, 0.8);
+        finalCol = mix(finalCol, poisonColor, vPoison * 0.5);
+    }
+
+    float finalAlpha = edge * vAlpha;
+    if (vPoison > 0.0) {
+        finalAlpha *= mix(1.0, 0.75, vPoison);
+    }
+
+    fragColor = vec4(finalCol, finalAlpha);
 }

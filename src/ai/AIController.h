@@ -3,6 +3,7 @@
 
 #include "Behaviors.h"
 #include "util/Math.h"
+#include "entity/Virus.h"
 
 class Player;
 class World;
@@ -25,6 +26,9 @@ private:
     int m_threatPlayerIdx = -1;
     Vec2 m_nearestVirusPos;
     bool m_virusNearby = false;
+    VirusType m_nearestVirusType = VirusType::Normal;
+    float m_virusDanger = 0.0f;     // 0~1,综合危险度(1=必须立刻离开)
+    float m_virusAvoidMul = 1.0f;   // 躲避距离乘数
 
     void scanEnvironment(const Player& self, const World& world);
     void evaluateState(const Player& self);

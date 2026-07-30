@@ -15,12 +15,14 @@ class HUDOverlay : public QWidget {
     Q_OBJECT
     Q_PROPERTY(float toastOpacity READ toastOpacity WRITE setToastOpacity)
     Q_PROPERTY(float massPulse READ massPulse WRITE setMassPulse)
+    Q_PROPERTY(float poisonOpacity READ poisonOpacity WRITE setPoisonOpacity)
 public:
     explicit HUDOverlay(QWidget* parent = nullptr);
 
     void setMass(float mass);
     void setShield(int count);     // 防护盾数量
     void setKills(int kills);
+    void setPoison(float remaining);  // 剩余中毒秒数,0 = 无中毒
     void setRank(int rank, int total);
     void setMode(const QString& mode);
     void setTimeRemaining(int seconds);
@@ -37,6 +39,9 @@ public:
 
     float massPulse() const { return m_massPulse; }
     void setMassPulse(float v);
+
+    float poisonOpacity() const { return m_poisonOpacity; }
+    void setPoisonOpacity(float v);
 
     void setLeaderboard(LeaderboardWidget* lb);
     void setGameWidget(QWidget* w) { m_gameWidget = w; }
@@ -101,6 +106,13 @@ private:
     float m_massPulse = 0.0f;
     float m_prevMass = 0.0f;
     QPropertyAnimation* m_pulseAnim = nullptr;
+
+    // === 中毒边缘脉冲 ===
+    QWidget* m_poisonOverlay = nullptr;
+    QPropertyAnimation* m_poisonAnim = nullptr;
+    float m_poisonOpacity = 0.0f;
+    bool m_poisonActive = false;
+    float m_poisonRemaining = 0.0f;
 
     // === 布局 ===
     void createTopBar();

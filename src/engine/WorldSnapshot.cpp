@@ -75,6 +75,7 @@ WorldSnapshot WorldSnapshot::fromWorld(const World& world, int tickId,
         VirusObservation vo;
         vo.x = v.pos.x;
         vo.y = v.pos.y;
+        vo.type = static_cast<int>(v.type());
         s.viruses.append(vo);
     }
 

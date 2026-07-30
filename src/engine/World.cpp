@@ -124,13 +124,23 @@ void World::init(GameMode mode) {
             Vec2 cpos(cx + ox, cy + oy);
             cpos.x = clamp(cpos.x, 200.0f, m_width - 200.0f);
             cpos.y = clamp(cpos.y, 200.0f, m_height - 200.0f);
-            Virus v(cpos);
+            float typeRoll = randFloat(0, 1);
+            VirusType vt = VirusType::Normal;
+            if (typeRoll < 0.05f)       vt = VirusType::Big;
+            else if (typeRoll < 0.15f)  vt = VirusType::Exploder;
+            else if (typeRoll < 0.25f)  vt = VirusType::Poison;
+            Virus v(cpos, vt);
             m_viruses.append(v);
         }
     }
 
     for (int i = 0; i < scatteredCount; i++) {
-        Virus v({randFloat(200, m_width - 200), randFloat(200, m_height - 200)});
+        float typeRoll = randFloat(0, 1);
+        VirusType vt = VirusType::Normal;
+        if (typeRoll < 0.05f)       vt = VirusType::Big;
+        else if (typeRoll < 0.15f)  vt = VirusType::Exploder;
+        else if (typeRoll < 0.25f)  vt = VirusType::Poison;
+        Virus v({randFloat(200, m_width - 200), randFloat(200, m_height - 200)}, vt);
         m_viruses.append(v);
     }
 
@@ -285,11 +295,9 @@ void World::update(float dt) {
                 float dist = (c.pos - v.pos).length();
                 if (dist < c.radius() + v.radius()) {
                     if (c.mass > v.mass * 1.1f) {
-                        // 吃刺球获得 +1 防护盾（仅在大逃杀模式中有意义，其他模式也保留以备扩展）
                         if (m_currentMode == GameMode::BattleRoyale) {
                             p.shieldCount += 1;
                         }
-                        // Player eats virus: gain random mass, then split into 9 fragments
                         float virusMass = v.mass;
                         float bonusMass = randFloat(0.0f, 50.0f);
                         c.mass += virusMass + bonusMass;
@@ -297,15 +305,53 @@ void World::update(float dt) {
 
                         p.virusHitTimer = 2.0f;
 
-                        int fragmentCount = cfg.virusFragmentCount;
-                        int maxNewCells = cfg.maxCellsPerPlayer - p.cells.size();
-                        if (maxNewCells <= 0) {
-                            // Already at max cells, just gain mass
+                        // Exploder 病毒:玩家直接被炸成 5 个细胞,不分裂极多
+                        if (v.type() == VirusType::Exploder) {
+                            int exploderFrags = 5;
+                            int maxNewCells = cfg.maxCellsPerPlayer - p.cells.size();
+                            if (maxNewCells > 0) {
+                                exploderFrags = qMin(exploderFrags, maxNewCells + 1);
+                                float totalMass = c.mass;
+                                float perFrag = totalMass / exploderFrags;
+                                c.mass = perFrag;
+                                c.isMerging = true;
+                                c.mergeTimer = cfg.mergeCooldown;
+                                for (int fi = 1; fi < exploderFrags; fi++) {
+                                    Cell newCell;
+                                    newCell.mass = perFrag;
+                                    float angle = (fi * 2.0f * 3.14159f) / (exploderFrags - 1);
+                                    newCell.pos = c.pos + Vec2(cos(angle), sin(angle)) * (c.radius() * 3);
+                                    newCell.color = c.color;
+                                    newCell.splitCooldown = 0.5f;
+                                    newCell.vel = Vec2(cos(angle), sin(angle)) * cfg.virusFragmentVelocity * 1.3f;
+                                    newCell.isMerging = true;
+                                    newCell.mergeTimer = cfg.mergeCooldown;
+                                    p.cells.append(newCell);
+                                }
+                            }
                             v.alive = false;
                             AudioManager::instance().playSfx("virus_hit");
                             continue;
                         }
-                        fragmentCount = qMin(fragmentCount, maxNewCells + 1); // +1 for the original cell
+
+                        // Poison 病毒:给被吃 cell 加上 5 秒持续掉血
+                        if (v.type() == VirusType::Poison) {
+                            c.poisonTimer = 5.0f;
+                        }
+
+                        // Big 病毒:碎片数翻倍
+                        int baseFragmentCount = cfg.virusFragmentCount;
+                        if (v.type() == VirusType::Big) {
+                            baseFragmentCount *= 2;
+                        }
+                        int fragmentCount = baseFragmentCount;
+                        int maxNewCells = cfg.maxCellsPerPlayer - p.cells.size();
+                        if (maxNewCells <= 0) {
+                            v.alive = false;
+                            AudioManager::instance().playSfx("virus_hit");
+                            continue;
+                        }
+                        fragmentCount = qMin(fragmentCount, maxNewCells + 1);
 
                         float totalMass = c.mass;
                         float perFragmentMass = totalMass / fragmentCount;
@@ -538,7 +584,7 @@ void World::applySnapshot(const WorldSnapshot& snap, int myPlayerId) {
 
     // 5. 重建病毒
     for (const auto& vo : snap.viruses) {
-        Virus v({vo.x, vo.y});
+        Virus v({vo.x, vo.y}, static_cast<VirusType>(vo.type));
         v.mass = Config::instance().virusMass;
         v.alive = true;
         m_viruses.append(v);

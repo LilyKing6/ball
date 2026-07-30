@@ -12,6 +12,46 @@
 #include <QApplication>
 #include <QKeyEvent>
 
+// 中毒边缘脉冲 overlay:覆盖整个父窗口,只画屏幕边缘紫色渐变
+class PoisonOverlay : public QWidget {
+public:
+    explicit PoisonOverlay(QWidget* parent) : QWidget(parent) {
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setAttribute(Qt::WA_NoSystemBackground);
+    }
+    void setOpacity(float v) { m_opacity = v; update(); }
+protected:
+    void paintEvent(QPaintEvent*) override {
+        if (m_opacity <= 0.001f) return;
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        const int edgeW = 80;  // 边缘渐变带宽
+        QColor col(180, 0, 255);
+
+        QLinearGradient gTop(0, 0, 0, edgeW);
+        gTop.setColorAt(0, QColor(col.red(), col.green(), col.blue(), (int)(220 * m_opacity)));
+        gTop.setColorAt(1, QColor(col.red(), col.green(), col.blue(), 0));
+        p.fillRect(0, 0, width(), edgeW, gTop);
+
+        QLinearGradient gBot(0, height() - edgeW, 0, height());
+        gBot.setColorAt(0, QColor(col.red(), col.green(), col.blue(), 0));
+        gBot.setColorAt(1, QColor(col.red(), col.green(), col.blue(), (int)(220 * m_opacity)));
+        p.fillRect(0, height() - edgeW, width(), edgeW, gBot);
+
+        QLinearGradient gLeft(0, 0, edgeW, 0);
+        gLeft.setColorAt(0, QColor(col.red(), col.green(), col.blue(), (int)(220 * m_opacity)));
+        gLeft.setColorAt(1, QColor(col.red(), col.green(), col.blue(), 0));
+        p.fillRect(0, 0, edgeW, height(), gLeft);
+
+        QLinearGradient gRight(width() - edgeW, 0, width(), 0);
+        gRight.setColorAt(0, QColor(col.red(), col.green(), col.blue(), 0));
+        gRight.setColorAt(1, QColor(col.red(), col.green(), col.blue(), (int)(220 * m_opacity)));
+        p.fillRect(width() - edgeW, 0, edgeW, height(), gRight);
+    }
+private:
+    float m_opacity = 0.0f;
+};
+
 HUDOverlay::HUDOverlay(QWidget* parent) : QWidget(parent) {
     // HUDOverlay 是控制器，本身不显示任何内容
     setAttribute(Qt::WA_TransparentForMouseEvents, true);
@@ -89,6 +129,27 @@ HUDOverlay::HUDOverlay(QWidget* parent) : QWidget(parent) {
         decay->setStartValue(0.15f);
         decay->setEndValue(0.0f);
         decay->start(QAbstractAnimation::DeleteWhenStopped);
+    });
+
+    // 中毒边缘脉冲 overlay
+    m_poisonOverlay = new PoisonOverlay(parent);
+    m_poisonOverlay->hide();
+    m_poisonAnim = new QPropertyAnimation(this, "poisonOpacity", this);
+    m_poisonAnim->setDuration(800);
+    m_poisonAnim->setStartValue(0.2f);
+    m_poisonAnim->setEndValue(0.9f);
+    m_poisonAnim->setEasingCurve(QEasingCurve::InOutSine);
+    connect(m_poisonAnim, &QPropertyAnimation::finished, this, [this]() {
+        if (!m_poisonActive) return;
+        // 反向播放形成脉冲循环
+        if (m_poisonAnim->currentValue().toFloat() > 0.5f) {
+            m_poisonAnim->setStartValue(0.9f);
+            m_poisonAnim->setEndValue(0.2f);
+        } else {
+            m_poisonAnim->setStartValue(0.2f);
+            m_poisonAnim->setEndValue(0.9f);
+        }
+        m_poisonAnim->start();
     });
 }
 
@@ -450,6 +511,12 @@ void HUDOverlay::updatePositions() {
         m_leaderboard->move(w - 190, 60);
         m_leaderboard->raise();
     }
+
+    // 中毒边缘 overlay - 覆盖整个父窗口
+    if (m_poisonOverlay) {
+        m_poisonOverlay->setGeometry(0, 0, w, h);
+        if (m_poisonActive) m_poisonOverlay->raise();
+    }
 }
 
 void HUDOverlay::resizeEvent(QResizeEvent*) {
@@ -502,6 +569,28 @@ void HUDOverlay::setShield(int count) {
     } else {
         m_shieldLabel->setText(QString("🛡 %1").arg(count));
         m_shieldLabel->show();
+    }
+}
+
+void HUDOverlay::setPoison(float remaining) {
+    m_poisonRemaining = remaining;
+    bool shouldActivate = (remaining > 0.0f);
+    if (shouldActivate != m_poisonActive) {
+        m_poisonActive = shouldActivate;
+        if (shouldActivate) {
+            if (m_poisonOverlay) {
+                m_poisonOverlay->show();
+                m_poisonOverlay->raise();
+                updatePositions();
+            }
+            m_poisonAnim->setStartValue(0.2f);
+            m_poisonAnim->setEndValue(0.9f);
+            m_poisonAnim->start();
+        } else {
+            if (m_poisonOverlay) m_poisonOverlay->hide();
+            m_poisonAnim->stop();
+            setPoisonOpacity(0.0f);
+        }
     }
 }
 
@@ -570,6 +659,12 @@ void HUDOverlay::setMassPulse(float v) {
     QFont f = m_massLabel->font();
     f.setPixelSize(static_cast<int>(24 * s));
     m_massLabel->setFont(f);
+}
+
+void HUDOverlay::setPoisonOpacity(float v) {
+    m_poisonOpacity = v;
+    auto* ov = static_cast<PoisonOverlay*>(m_poisonOverlay);
+    if (ov) ov->setOpacity(v);
 }
 
 void HUDOverlay::showAchievement(const QString& name, const QString& description) {

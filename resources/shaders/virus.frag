@@ -1,5 +1,6 @@
 #version 330 core
 in vec2 vLocalPos;
+in vec3 vColor;
 out vec4 fragColor;
 
 void main() {
@@ -13,8 +14,9 @@ void main() {
     float alpha = 1.0 - smoothstep(shape - 0.02, shape, dist);
     if (alpha < 0.01) discard;
 
-    vec3 coreColor = vec3(0.1, 0.5, 0.1);
-    vec3 spikeColor = vec3(0.0, 0.35, 0.0);
+    // 用 vColor 做明暗差分：核心亮、刺尖暗，保持体积感
+    vec3 coreColor = vColor * 1.15;
+    vec3 spikeColor = vColor * 0.55;
     vec3 finalColor = mix(spikeColor, coreColor, smoothstep(shape - 0.1, shape - 0.05, dist));
 
     fragColor = vec4(finalColor, alpha);

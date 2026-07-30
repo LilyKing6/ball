@@ -6,6 +6,7 @@
 struct VirusInstance {
     float posX, posY;
     float radius;
+    float r, g, b;  // 颜色 (归一化 0-1)
 };
 
 VirusRenderer::VirusRenderer() {}
@@ -58,6 +59,10 @@ bool VirusRenderer::initialize() {
     glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(VirusInstance), (void*)offsetof(VirusInstance, radius));
     glVertexAttribDivisor(2, 1);
 
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(VirusInstance), (void*)offsetof(VirusInstance, r));
+    glVertexAttribDivisor(3, 1);
+
     glBindVertexArray(0);
     return true;
 }
@@ -69,7 +74,9 @@ void VirusRenderer::render(const QVector<Virus>& viruses, const Camera& camera) 
     for (const auto& v : viruses) {
         if (!v.alive) continue;
         if (instances.size() >= MAX_INSTANCES) break;
-        instances.append({v.pos.x, v.pos.y, v.radius()});
+        QColor c = v.color();
+        instances.append({v.pos.x, v.pos.y, v.radius(),
+                          c.redF(), c.greenF(), c.blueF()});
     }
 
     if (instances.isEmpty()) return;

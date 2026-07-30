@@ -40,7 +40,7 @@ QPointF QPainterGLWidget::worldToScreen(float wx, float wy) const {
     );
 }
 
-void QPainterGLWidget::drawBall(QPainter& p, const QPointF& center, float radius, const QColor& color, const QString& name) {
+void QPainterGLWidget::drawBall(QPainter& p, const QPointF& center, float radius, const QColor& color, const QString& name, float poisonFactor) {
     float displayR = radius * (1.0f + m_pulseAmount);
     if (displayR < 8) displayR = 8;
 
@@ -51,8 +51,23 @@ void QPainterGLWidget::drawBall(QPainter& p, const QPointF& center, float radius
     p.setBrush(glowColor);
     p.drawEllipse(center, displayR * 1.3f, displayR * 1.3f);
 
+    // 中毒:紫色光晕外圈
+    if (poisonFactor > 0.0f) {
+        QColor poisonGlow(180, 0, 255);
+        poisonGlow.setAlpha((int)(60 * poisonFactor));
+        p.setBrush(poisonGlow);
+        p.drawEllipse(center, displayR * 1.5f, displayR * 1.5f);
+    }
+
     // Skin
     SkinManager::instance().applySkin(p, m_playerSkin, center, displayR);
+
+    // 中毒:紫色覆盖层
+    if (poisonFactor > 0.0f) {
+        QColor poisonOverlay(180, 0, 255, (int)(80 * poisonFactor));
+        p.setBrush(poisonOverlay);
+        p.drawEllipse(center, displayR, displayR);
+    }
 
     // Highlight
     QPointF highlight = center - QPointF(displayR * 0.3f, displayR * 0.3f);
@@ -251,11 +266,12 @@ void QPainterGLWidget::paintEvent(QPaintEvent*) {
         float r = v.radius() * scale;
         if (r < 6) r = 6;
         if (sp.x() > -r && sp.x() < sz.width() + r && sp.y() > -r && sp.y() < sz.height() + r) {
+            QColor base = v.color();
             QRadialGradient grad(sp, r);
-            grad.setColorAt(0, QColor(60, 220, 60));
-            grad.setColorAt(1, QColor(0, 120, 0));
+            grad.setColorAt(0, base.lighter(115));
+            grad.setColorAt(1, base.darker(140));
             p.setBrush(grad);
-            p.setPen(QPen(QColor(0, 80, 0), 2));
+            p.setPen(QPen(base.darker(180), 2));
             p.drawEllipse(sp, r, r);
         }
     }
@@ -302,13 +318,25 @@ void QPainterGLWidget::paintEvent(QPaintEvent*) {
     }
 
     // Players
-    for (const auto& pl : world.players()) {
-        for (const auto& c : pl.cells) {
-            if (!c.alive) continue;
-            QPointF sp = worldToScreen(c.pos.x, c.pos.y);
-            float r = c.radius() * scale;
-            if (sp.x() > -r && sp.x() < sz.width() + r && sp.y() > -r && sp.y() < sz.height() + r) {
-                drawBall(p, sp, r, c.color, pl.name);
+    {
+        float t = QDateTime::currentMSecsSinceEpoch() / 1000.0f;
+        int cellIdx = 0;
+        for (const auto& pl : world.players()) {
+            for (const auto& c : pl.cells) {
+                if (!c.alive) continue;
+                QPointF sp = worldToScreen(c.pos.x, c.pos.y);
+                float r = c.radius() * scale;
+                if (sp.x() > -r && sp.x() < sz.width() + r && sp.y() > -r && sp.y() < sz.height() + r) {
+                    // 中毒抖动:5% radius 上限
+                    float poisonFactor = (c.poisonTimer > 0) ? qMin(c.poisonTimer / 5.0f, 1.0f) : 0.0f;
+                    if (poisonFactor > 0.0f) {
+                        float jx = std::sin(t * 30.0f + cellIdx) * r * 0.05f * poisonFactor;
+                        float jy = std::cos(t * 30.0f + cellIdx * 1.3f) * r * 0.05f * poisonFactor;
+                        sp += QPointF(jx, jy);
+                    }
+                    drawBall(p, sp, r, c.color, pl.name, poisonFactor);
+                }
+                cellIdx++;
             }
         }
     }

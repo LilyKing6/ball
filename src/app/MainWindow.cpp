@@ -162,6 +162,12 @@ void MainWindow::setEngine(GameEngine* engine) {
             } else {
                 m_hud->setShield(0);
             }
+            // 中毒 HUD:取本地玩家所有 cell 的最大 poisonTimer
+            float maxPoison = 0.0f;
+            for (const auto& c : local->cells) {
+                if (c.poisonTimer > maxPoison) maxPoison = c.poisonTimer;
+            }
+            m_hud->setPoison(maxPoison);
             m_hud->hideDeathOverlay();
         } else {
             m_hud->setShield(0);

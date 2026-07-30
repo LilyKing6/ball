@@ -41,6 +41,9 @@ void AIController::scanEnvironment(const Player& self, const World& world) {
     m_targetPlayerIdx = -1;
     m_threatPlayerIdx = -1;
     m_virusNearby = false;
+    m_virusDanger = 0.0f;
+    m_virusAvoidMul = 1.0f;
+    m_nearestVirusType = VirusType::Normal;
 
     float closestFoodDist = radius;
     float closestPreyDist = radius;
@@ -88,6 +91,26 @@ void AIController::scanEnvironment(const Player& self, const World& world) {
             closestVirusDist = d;
             m_nearestVirusPos = v.pos;
             m_virusNearby = true;
+            m_nearestVirusType = v.type();
+            // 按类型设置危险度和躲避乘数
+            switch (v.type()) {
+                case VirusType::Exploder:
+                    m_virusDanger = 1.0f;
+                    m_virusAvoidMul = 2.0f;
+                    break;
+                case VirusType::Poison:
+                    m_virusDanger = 0.7f;
+                    m_virusAvoidMul = 1.5f;
+                    break;
+                case VirusType::Big:
+                    m_virusDanger = 0.5f;
+                    m_virusAvoidMul = 1.3f;
+                    break;
+                default:
+                    m_virusDanger = 0.3f;
+                    m_virusAvoidMul = 1.0f;
+                    break;
+            }
         }
     }
 }
@@ -125,12 +148,14 @@ void AIController::moveToward(Player& self, const Vec2& target) {
 
     if (m_virusNearby) {
         Vec2 awayFromVirus = (com - m_nearestVirusPos).normalized();
-        dir = (dir + awayFromVirus * 0.5f).normalized();
+        // 按类型危险度加权(0.3~1.0)
+        float w = 0.3f + m_virusDanger * 0.7f;
+        dir = (dir + awayFromVirus * w).normalized();
     }
 
     float totalM = qMax(self.totalMass(), 10.0f);
     float offset = 8.0f * qSqrt(totalM) + 100.0f;
-    self.mouseWorldPos = com + dir * offset;
+    self.mouseWorldPos = com + dir * offset * m_virusAvoidMul;
 }
 
 void AIController::moveAwayFrom(Player& self, const Vec2& threat) {
@@ -140,12 +165,13 @@ void AIController::moveAwayFrom(Player& self, const Vec2& threat) {
 
     if (m_virusNearby) {
         Vec2 awayFromVirus = (com - m_nearestVirusPos).normalized();
-        dir = (dir + awayFromVirus * 0.5f).normalized();
+        float w = 0.3f + m_virusDanger * 0.7f;
+        dir = (dir + awayFromVirus * w).normalized();
     }
 
     float totalM = qMax(self.totalMass(), 10.0f);
     float offset = 8.0f * qSqrt(totalM) + 100.0f;
-    self.mouseWorldPos = com + dir * offset;
+    self.mouseWorldPos = com + dir * offset * m_virusAvoidMul;
 }
 
 void AIController::wander(Player& self) {

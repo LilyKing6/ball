@@ -104,7 +104,13 @@ void MinimapRenderer::render(QPainter& p, const QRect& widgetRect, const World& 
         if (local && local->totalMass() > 0 && !local->cells.isEmpty()) {
             QPointF sp = worldToMinimap(local->centerOfMass().x, local->centerOfMass().y, mmRect, worldW, worldH);
             float r = 5.0f;
-            p.setPen(QPen(QColor(255, 255, 255), 2));
+            // 中毒:本地玩家小地图标记边框变紫
+            bool localPoisoned = false;
+            for (const auto& lc : local->cells) {
+                if (lc.poisonTimer > 0.0f) { localPoisoned = true; break; }
+            }
+            QColor borderColor = localPoisoned ? QColor(180, 0, 255) : QColor(255, 255, 255);
+            p.setPen(QPen(borderColor, 2));
             p.setBrush(local->cells[0].color);
             p.drawEllipse(sp, r, r);
         }
@@ -134,7 +140,7 @@ void MinimapRenderer::render(QPainter& p, const QRect& widgetRect, const World& 
         if (!v.alive) continue;
         QPointF sp = worldToMinimap(v.pos.x, v.pos.y, mmRect, worldW, worldH);
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(0, 200, 0));
+        p.setBrush(v.color());
         QPainterPath tri;
         tri.moveTo(sp.x(), sp.y() - 4);
         tri.lineTo(sp.x() - 3, sp.y() + 3);

@@ -16,6 +16,7 @@ public:
     bool isMerging = false;
     float mergeTimer = 0.0f;
     float invincibleTimer = 0.0f;  // 出生无敌倒计时（>0 时免疫被吃）
+    float poisonTimer = 0.0f;     // 中毒倒计时（>0 时每帧扣 mass）
 };
 
 class Player {
