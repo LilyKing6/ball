@@ -100,7 +100,8 @@ RankWindow::RankWindow(QWidget* parent)
 
     struct LadderItem { QString name; int min; int max; QColor color; };
     QVector<LadderItem> ladder = {
-        {"王者", 3000, 9999, QColor("#FF0000")},
+        {"超神", 3500, 9999, QColor("#FF00FF")},
+        {"王者", 3000, 3499, QColor("#FF0000")},
         {"大师", 2500, 2999, QColor("#FF4500")},
         {"钻石", 2000, 2499, QColor("#B9F2FF")},
         {"铂金", 1600, 1999, QColor("#E5E4E2")},
@@ -167,7 +168,7 @@ void RankWindow::refresh(const QString& playerId) {
     m_progressBar->setValue(static_cast<int>(progress * 1000));
 
     RankTier currentTier = RankSystem::tierFromElo(elo);
-    if (currentTier == RankTier::King_I) {
+    if (currentTier == RankTier::SuperGod) {
         m_progressText->setText("已达最高段位");
     } else {
         TierInfo nextInfo = RankSystem::tierInfo(static_cast<RankTier>(static_cast<int>(currentTier) + 1));
@@ -176,7 +177,7 @@ void RankWindow::refresh(const QString& playerId) {
     }
 
     QString gradient = QString("stop:0 %1,stop:1 %2").arg(info.color.name()).arg(
-        currentTier == RankTier::King_I ? info.color.name() :
+        currentTier == RankTier::SuperGod ? info.color.name() :
         RankSystem::tierInfo(static_cast<RankTier>(static_cast<int>(currentTier) + 1)).color.name());
     m_progressBar->setStyleSheet(QString(R"(
         QProgressBar { background: rgba(255,255,255,0.1); border-radius: 7px; border: none; }

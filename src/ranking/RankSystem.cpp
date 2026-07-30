@@ -32,7 +32,7 @@ RankTier RankSystem::tierFromElo(int elo) {
         if (elo >= kTiers[i].minElo && elo <= kTiers[i].maxElo)
             return static_cast<RankTier>(i);
     }
-    return RankTier::King_I;
+    return RankTier::SuperGod;
 }
 
 TierInfo RankSystem::tierInfo(RankTier tier) {
@@ -63,7 +63,7 @@ int RankSystem::calculateEloChange(int winnerElo, int loserElo, float winnerMass
 float RankSystem::progressToNextTier(int elo) {
     RankTier t = tierFromElo(elo);
     TierInfo info = tierInfo(t);
-    if (t == RankTier::King_I) return 1.0f;
+    if (t == RankTier::SuperGod) return 1.0f;
     TierInfo next = tierInfo(static_cast<RankTier>(static_cast<int>(t) + 1));
     float range = static_cast<float>(next.minElo - info.minElo);
     float progress = static_cast<float>(elo - info.minElo);

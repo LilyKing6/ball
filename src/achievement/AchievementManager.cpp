@@ -135,15 +135,18 @@ void AchievementManager::checkEloTier(const QString& playerId, int elo, const QS
             met = elo >= static_cast<int>(def.condValue);
             break;
         case AchievementCondition::TierReach: {
-            // TierReach condValue = tier index (Gold_III = 6)
+            // TierReach condValue = tier index（与 RankTier 枚举顺序一致）
             int tierIdx = -1;
-            QStringList tiers = {"Bronze_III","Bronze_II","Bronze_I",
-                                 "Silver_III","Silver_II","Silver_I",
-                                 "Gold_III","Gold_II","Gold_I",
-                                 "Platinum_III","Platinum_II","Platinum_I",
-                                 "Diamond_III","Diamond_II","Diamond_I",
-                                 "Master_III","Master_II","Master_I",
-                                 "King_III","King_II","King_I"};
+            QStringList tiers = {
+                "青铜 III","青铜 II","青铜 I",
+                "白银 III","白银 II","白银 I",
+                "黄金 II","黄金 I",
+                "铂金 II","铂金 I",
+                "钻石 III","钻石 II","钻石 I",
+                "大师 III","大师 II","大师 I",
+                "王者 III","王者 II","王者 I",
+                "超神"
+            };
             for (int i = 0; i < tiers.size(); i++) {
                 if (tierName == tiers[i]) { tierIdx = i; break; }
             }
